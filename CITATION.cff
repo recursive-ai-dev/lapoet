@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+title: "LaPoet: A Neuro-Symbolic Poetry Synthesis Engine"
+message: "If you use LaPoet in your research or software, please cite it using the following metadata."
+type: software
+
+authors:
+  - family-names: Davison
+    given-names: Damien
+  - family-names: Maillet
+    given-names: Michael
+  - family-names: Davison
+    given-names: Sacha
+
+abstract: >
+  LaPoet is a neuro-symbolic generative poetry engine that fuses emotional
+  manifold modeling, rule-based reasoning, spectral rhythm analysis, and
+  reinforcement-driven aesthetic optimization. The system integrates
+  Kernel PCA for affective embedding, FFT-based meter detection,
+  constraint propagation via a Rete engine, CFG validation through
+  CYK parsing, multi-objective beam search, novelty enforcement via
+  cycle detection, and a TD(λ) aesthetic value function. This architecture
+  enables controllable poetic synthesis with explicit emotional arcs,
+  syntactic correctness, rhythmic coherence, and interpretable reasoning
+  over generation pathways. LaPoet provides a transparent and modular
+  framework for computational creativity that does not rely on large
+  pretrained language models.
+
+version: "1.0.0"
+date-released: 2025-01-01
+license: "Apache-2.0"
+
+repository-code: "https://github.com/recursive-ai-dev/lapoet"
+url: "https://github.com/recursive-ai-dev/lapoet"
