@@ -50,35 +50,32 @@ class KernelPCA {
    */
   _centerKernelMatrix(K) {
     const n = K.length;
-    const ones = Array(n).fill().map(() => Array(n).fill(1 / n));
-    const result = Array(n).fill().map(() => Array(n).fill(0));
+    const rowMeans = Array(n).fill(0);
+    const colMeans = Array(n).fill(0);
+    let totalMean = 0;
 
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
-        let sum1 = 0, sum2 = 0, sum3 = 0;
-        
-        // 1_n*K term
-        for (let k = 0; k < n; k++) {
-          sum1 += ones[i][k] * K[k][j];
-        }
-        
-        // K*1_n term
-        for (let k = 0; k < n; k++) {
-          sum2 += K[i][k] * ones[k][j];
-        }
-        
-        // 1_n*K*1_n term
-        for (let k = 0; k < n; k++) {
-          for (let l = 0; l < n; l++) {
-            sum3 += ones[i][k] * K[k][l] * ones[l][j];
-          }
-        }
-        
-        result[i][j] = K[i][j] - sum1 - sum2 + sum3;
+        rowMeans[i] += K[i][j];
+        colMeans[j] += K[i][j];
+        totalMean += K[i][j];
       }
     }
-    
-    return result;
+
+    for (let i = 0; i < n; i++) {
+      rowMeans[i] /= n;
+      colMeans[i] /= n;
+    }
+    totalMean /= n * n;
+
+    const centered = Array(n).fill().map(() => Array(n).fill(0));
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        centered[i][j] = K[i][j] - rowMeans[i] - colMeans[j] + totalMean;
+      }
+    }
+
+    return centered;
   }
 
   /**
@@ -486,6 +483,7 @@ class AGTuneEngine {
     this.vocabulary = new Set();
     this.embeddings = new Map();
     this.emotionalSpace = new Map();
+    this.lastCorpusSignature = null;
     this.isTrained = false;
     this._initializeReteRules();
   }
@@ -556,6 +554,39 @@ class AGTuneEngine {
   }
 
   /**
+   * Lightweight corpus fingerprint so we can skip rebuilding
+   * embeddings/PCA when the training data has not changed.
+   */
+  _corpusSignature(corpus) {
+    let hash = 0;
+    for (const line of corpus) {
+      for (let i = 0; i < line.length; i++) {
+        hash = (hash * 31 + line.charCodeAt(i)) >>> 0;
+      }
+      hash ^= line.length + corpus.length;
+    }
+    return `${corpus.length}:${hash}`;
+  }
+
+  _asNumberArray(arr, length, fill = 0) {
+    const safe = Array.isArray(arr) ? arr : [];
+    const out = [];
+    for (let i = 0; i < (length ?? safe.length); i++) {
+      const v = safe[i];
+      out.push(Number.isFinite(v) ? v : fill);
+    }
+    if (length !== undefined && out.length < length) {
+      while (out.length < length) out.push(fill);
+    }
+    return out;
+  }
+
+  _asNumberMatrix(mat) {
+    if (!Array.isArray(mat)) return [];
+    return mat.map(row => this._asNumberArray(row));
+  }
+
+  /**
    * Heuristic syllable counting (vowel groups)
    */
   _countSyllables(word) {
@@ -574,58 +605,70 @@ class AGTuneEngine {
    * Builds vocabulary, embeddings, and trains Kernel PCA + TD estimator
    */
   train(corpus, epochs = 10) {
+    const corpusSignature = this._corpusSignature(corpus);
+    const shouldRebuild = this.lastCorpusSignature !== corpusSignature || !this.isTrained;
+
+    if (shouldRebuild) {
+      this.embeddings.clear();
+      this.emotionalSpace.clear();
+    }
+
     // Build frequency-based vocabulary
-    const freq = {};
-    corpus.forEach(text => {
-      this._tokenize(text).forEach(word => {
-        freq[word] = (freq[word] || 0) + 1;
+    if (shouldRebuild) {
+      const freq = {};
+      corpus.forEach(text => {
+        this._tokenize(text).forEach(word => {
+          freq[word] = (freq[word] || 0) + 1;
+        });
       });
-    });
-    
-    const vocab = Object.entries(freq)
-      .filter(([_, count]) => count >= 2) // Min frequency threshold
-      .map(([word, _]) => word);
-    
-    this.vocabulary = new Set(vocab);
-    
-    // Initialize embeddings (co-occurrence based)
-    const window = 3;
-    vocab.forEach(word => this.embeddings.set(word, Array(32).fill(0)));
-    
-    corpus.forEach(text => {
-      const tokens = this._tokenize(text);
-      tokens.forEach((word, i) => {
-        if (!this.embeddings.has(word)) return;
-        const embedding = this.embeddings.get(word);
-        
-        // Accumulate co-occurrences with context window
-        for (let j = Math.max(0, i - window); j < Math.min(tokens.length, i + window + 1); j++) {
-          if (i === j) continue;
-          const neighbor = tokens[j];
-          if (this.embeddings.has(neighbor)) {
-            embedding[j % embedding.length] += 0.1;
-          }
-        }
-      });
-    });
-    
-    // Train Kernel PCA on embeddings
-    const X = vocab.filter(w => this.embeddings.has(w)).map(w => {
-      const emb = this.embeddings.get(w);
-      return emb.slice(0, Math.min(8, emb.length));
-    });
-    
-    if (X.length > 0) {
-      this.kpca.fit(X);
       
-      // Transform vocabulary to emotional space
-      vocab.forEach(word => {
-        if (this.embeddings.has(word)) {
-          const emb = this.embeddings.get(word).slice(0, 8);
-          const eSpace = this.kpca.transform([emb])[0];
-          this.emotionalSpace.set(word, eSpace);
-        }
+      const vocab = Object.entries(freq)
+        .filter(([_, count]) => count >= 2) // Min frequency threshold
+        .map(([word, _]) => word);
+      
+      this.vocabulary = new Set(vocab);
+      
+      // Initialize embeddings (co-occurrence based)
+      const window = 3;
+      vocab.forEach(word => this.embeddings.set(word, Array(32).fill(0)));
+      
+      corpus.forEach(text => {
+        const tokens = this._tokenize(text);
+        tokens.forEach((word, i) => {
+          if (!this.embeddings.has(word)) return;
+          const embedding = this.embeddings.get(word);
+          
+          // Accumulate co-occurrences with context window
+          for (let j = Math.max(0, i - window); j < Math.min(tokens.length, i + window + 1); j++) {
+            if (i === j) continue;
+            const neighbor = tokens[j];
+            if (this.embeddings.has(neighbor)) {
+              embedding[j % embedding.length] += 0.1;
+            }
+          }
+        });
       });
+      
+      // Train Kernel PCA on embeddings
+      const X = vocab.filter(w => this.embeddings.has(w)).map(w => {
+        const emb = this.embeddings.get(w);
+        return emb.slice(0, Math.min(8, emb.length));
+      });
+      
+      if (X.length > 0) {
+        this.kpca.fit(X);
+        
+        // Transform vocabulary to emotional space
+        vocab.forEach(word => {
+          if (this.embeddings.has(word)) {
+            const emb = this.embeddings.get(word).slice(0, 8);
+            const eSpace = this.kpca.transform([emb])[0];
+            this.emotionalSpace.set(word, eSpace);
+          }
+        });
+      }
+
+      this.lastCorpusSignature = corpusSignature;
     }
     
     // Pre-train value estimator on corpus
@@ -648,6 +691,101 @@ class AGTuneEngine {
     
     this.isTrained = true;
     return totalReward / corpus.length;
+  }
+
+  /**
+   * Serialize the model state so it can be downloaded as a checkpoint.
+   */
+  saveCheckpoint() {
+    if (!this.isTrained) {
+      throw new Error('Train the model before saving a checkpoint');
+    }
+
+    return {
+      version: 1,
+      kpca: {
+        nComponents: this.kpca.nComponents,
+        degree: this.kpca.degree,
+        eigenvectors: this.kpca.eigenvectors,
+        eigenvalues: this.kpca.eigenvalues,
+        X_fit: this.kpca.X_fit
+      },
+      valueEstimator: {
+        weights: this.valueEstimator.weights,
+        alpha: this.valueEstimator.alpha,
+        gamma: this.valueEstimator.gamma,
+        lambda: this.valueEstimator.lambda,
+        eligibility: this.valueEstimator.eligibility
+      },
+      vocabulary: Array.from(this.vocabulary),
+      embeddings: Array.from(this.embeddings.entries()),
+      emotionalSpace: Array.from(this.emotionalSpace.entries()),
+      rng: {
+        state: this.rng.state,
+        index1: this.rng.index1,
+        index2: this.rng.index2
+      },
+      lastCorpusSignature: this.lastCorpusSignature,
+      isTrained: this.isTrained
+    };
+  }
+
+  /**
+   * Load a previously saved checkpoint.
+   */
+  loadCheckpoint(data) {
+    if (!data || data.version !== 1) {
+      throw new Error('Invalid checkpoint format');
+    }
+
+    // Restore KPCA (defensively sanitize numeric content)
+    this.kpca = new KernelPCA(data.kpca?.nComponents || 8, data.kpca?.degree || 3);
+    this.kpca.eigenvectors = this._asNumberMatrix(data.kpca?.eigenvectors);
+    this.kpca.eigenvalues = this._asNumberArray(data.kpca?.eigenvalues);
+    this.kpca.X_fit = this._asNumberMatrix(data.kpca?.X_fit);
+
+    // Restore value estimator
+    this.valueEstimator = new TDValueEstimator(
+      data.valueEstimator?.weights?.length || 16,
+      data.valueEstimator?.alpha ?? 0.01,
+      data.valueEstimator?.gamma ?? 0.95,
+      data.valueEstimator?.lambda ?? 0.8
+    );
+    this.valueEstimator.weights = this._asNumberArray(
+      data.valueEstimator?.weights,
+      this.valueEstimator.weights.length,
+      0
+    );
+    this.valueEstimator.eligibility = this._asNumberArray(
+      data.valueEstimator?.eligibility,
+      this.valueEstimator.eligibility.length,
+      0
+    );
+
+    // Restore maps/sets
+    this.vocabulary = new Set(Array.isArray(data.vocabulary) ? data.vocabulary : []);
+
+    const embeddingEntries = Array.isArray(data.embeddings) ? data.embeddings : [];
+    this.embeddings = new Map(
+      embeddingEntries.map(([k, v]) => [k, this._asNumberArray(v, 32, 0)])
+    );
+
+    const emotionalEntries = Array.isArray(data.emotionalSpace) ? data.emotionalSpace : [];
+    this.emotionalSpace = new Map(
+      emotionalEntries.map(([k, v]) => [k, this._asNumberArray(v, this.kpca.nComponents, 0)])
+    );
+
+    // RNG state
+    if (data.rng) {
+      if (Array.isArray(data.rng.state)) {
+        this.rng.state = data.rng.state.map(n => Number.isFinite(n) ? n : 0);
+      }
+      this.rng.index1 = Number.isFinite(data.rng.index1) ? data.rng.index1 : this.rng.index1;
+      this.rng.index2 = Number.isFinite(data.rng.index2) ? data.rng.index2 : this.rng.index2;
+    }
+
+    this.lastCorpusSignature = data.lastCorpusSignature || null;
+    this.isTrained = !!data.isTrained;
   }
 
   /**
@@ -898,6 +1036,12 @@ export default function AGTunePoet() {
     weights: [],
     visited: []
   });
+  const checkpointInputRef = useRef(null);
+
+  const safeNumber = useCallback((n, fallback = 0) => (
+    Number.isFinite(n) ? n : fallback
+  ), []);
+  const fmt = useCallback((n, digits = 2) => safeNumber(n).toFixed(digits), [safeNumber]);
 
   // Embedded training corpus (public domain poetry excerpts)
   const embeddedCorpus = [
@@ -940,6 +1084,68 @@ export default function AGTunePoet() {
     reader.readAsText(file);
   }, []);
 
+  const handleCheckpointDownload = useCallback(() => {
+    try {
+      const data = engine.saveCheckpoint();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `agtune-checkpoint-${Date.now()}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to save checkpoint', err);
+      alert('Train the model before saving a checkpoint.');
+    }
+  }, [engine]);
+
+  const handleCheckpointUpload = useCallback((event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result;
+        if (typeof text !== 'string') throw new Error('Invalid file');
+        const data = JSON.parse(text);
+        engine.loadCheckpoint(data);
+
+        setTrainingState(prev => ({
+          ...prev,
+          isTraining: false,
+          epoch: prev.epoch || 1,
+          progress: 0,
+          totalReward: prev.totalReward || 0
+        }));
+
+        setGeneration(prev => ({
+          ...prev,
+          poem: [],
+          states: [],
+          reward: 0,
+          isGenerating: false
+        }));
+
+      setVisualizations(prev => ({
+        ...prev,
+        eSpace: Array.from(engine.emotionalSpace.entries()).slice(0, 5),
+        weights: [...engine.valueEstimator.weights],
+        visited: []
+      }));
+    } catch (err) {
+        console.error('Failed to load checkpoint', err);
+        alert('Invalid checkpoint file.');
+      } finally {
+        if (checkpointInputRef.current) {
+          checkpointInputRef.current.value = '';
+        }
+      }
+    };
+    reader.readAsText(file);
+  }, [engine, checkpointInputRef]);
+
   const train = useCallback(async () => {
     if (corpus.length === 0) {
       loadCorpus();
@@ -968,7 +1174,7 @@ export default function AGTunePoet() {
       // Update visualizations
       setVisualizations({
         eSpace: Array.from(engine.emotionalSpace.entries()).slice(0, 5),
-        weights: engine.valueEstimator.weights,
+        weights: [...engine.valueEstimator.weights],
         visited: []
       });
       
@@ -1057,6 +1263,26 @@ export default function AGTunePoet() {
               ? `Training... ${trainingState.progress.toFixed(0)}%`
               : 'Train Model'}
           </button>
+
+          <div style={styles.buttonRow}>
+            <button
+              onClick={handleCheckpointDownload}
+              disabled={!engine.isTrained}
+              style={styles.rowButton}
+            >
+              Download Checkpoint
+            </button>
+            <label style={styles.uploadLabel}>
+              Upload Checkpoint
+              <input
+                ref={checkpointInputRef}
+                type="file"
+                accept="application/json"
+                onChange={handleCheckpointUpload}
+                style={styles.hiddenFileInput}
+              />
+            </label>
+          </div>
           
           {trainingState.epoch > 0 && (
             <div style={styles.stats}>
@@ -1152,7 +1378,7 @@ export default function AGTunePoet() {
               <div style={styles.vizBox}>
                 {visualizations.eSpace.map(([word, space]) => (
                   <div key={word} style={styles.eSpaceItem}>
-                    <strong>{word}</strong>: {space.map(v => v.toFixed(2)).join(', ')}
+                    <strong>{word}</strong>: {space.map(v => fmt(v, 2)).join(', ')}
                   </div>
                 ))}
                 {visualizations.eSpace.length === 0 && <p>No data</p>}
@@ -1164,16 +1390,19 @@ export default function AGTunePoet() {
               <h3>Value Estimator Weights</h3>
               <div style={styles.vizBox}>
                 <div style={styles.weightsDisplay}>
-                  {visualizations.weights.slice(0, 8).map((w, i) => (
+                  {visualizations.weights.slice(0, 8).map((w, i) => {
+                    const val = safeNumber(w);
+                    return (
                     <div key={i} style={styles.weightBar}>
                       <span>W{i}</span>
                       <div style={{
                         ...styles.weightFill, 
-                        width: `${Math.max(0, Math.min(100, (w + 1) * 50))}%`
+                        width: `${Math.max(0, Math.min(100, (val + 1) * 50))}%`
                       }} />
-                      <span>{w.toFixed(3)}</span>
+                      <span>{fmt(val, 3)}</span>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -1184,7 +1413,7 @@ export default function AGTunePoet() {
               <div style={styles.vizBox}>
                 {visualizations.visited.map((metric, i) => (
                   <div key={i} style={styles.metricRow}>
-                    L{i}: M={metric.meter.toFixed(2)} N={metric.novelty.toFixed(2)} V={metric.value.toFixed(2)}
+                    L{i}: M={fmt(metric.meter, 2)} N={fmt(metric.novelty, 2)} V={fmt(metric.value, 2)}
                   </div>
                 ))}
                 {visualizations.visited.length === 0 && <p>No generation yet</p>}
@@ -1254,10 +1483,53 @@ const styles = {
     fontWeight: 'bold',
     transition: 'background 0.3s'
   },
-  
+
   buttonDisabled: {
     background: '#444',
     cursor: 'not-allowed'
+  },
+
+  buttonRow: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '10px',
+    marginTop: '10px',
+    alignItems: 'stretch'
+  },
+
+  rowButton: {
+    width: '100%',
+    padding: '10px',
+    margin: '0',
+    background: '#007acc',
+    color: 'white',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 'bold',
+    transition: 'background 0.3s',
+    textAlign: 'center',
+    height: '100%'
+  },
+
+  uploadLabel: {
+    width: '100%',
+    padding: '10px',
+    margin: '0',
+    background: '#005fa3',
+    color: 'white',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    display: 'block',
+    height: '100%',
+    boxSizing: 'border-box'
+  },
+
+  hiddenFileInput: {
+    display: 'none'
   },
   
   input: {
