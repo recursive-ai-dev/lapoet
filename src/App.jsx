@@ -483,6 +483,7 @@ class AGTuneEngine {
     this.vocabulary = new Set();
     this.embeddings = new Map();
     this.emotionalSpace = new Map();
+    this.maxKernelWords = 1200; // cap to keep kernel matrix manageable
     this.lastCorpusSignature = null;
     this.isTrained = false;
     this._initializeReteRules();
@@ -622,15 +623,19 @@ class AGTuneEngine {
         });
       });
       
-      const vocab = Object.entries(freq)
+      const vocabEntries = Object.entries(freq)
         .filter(([_, count]) => count >= 2) // Min frequency threshold
-        .map(([word, _]) => word);
+        .sort((a, b) => b[1] - a[1]);
+
+      const limitedVocab = vocabEntries
+        .slice(0, this.maxKernelWords)
+        .map(([word]) => word);
       
-      this.vocabulary = new Set(vocab);
+      this.vocabulary = new Set(limitedVocab);
       
       // Initialize embeddings (co-occurrence based)
       const window = 3;
-      vocab.forEach(word => this.embeddings.set(word, Array(32).fill(0)));
+      limitedVocab.forEach(word => this.embeddings.set(word, Array(32).fill(0)));
       
       corpus.forEach(text => {
         const tokens = this._tokenize(text);
@@ -650,7 +655,7 @@ class AGTuneEngine {
       });
       
       // Train Kernel PCA on embeddings
-      const X = vocab.filter(w => this.embeddings.has(w)).map(w => {
+      const X = limitedVocab.filter(w => this.embeddings.has(w)).map(w => {
         const emb = this.embeddings.get(w);
         return emb.slice(0, Math.min(8, emb.length));
       });
@@ -659,7 +664,7 @@ class AGTuneEngine {
         this.kpca.fit(X);
         
         // Transform vocabulary to emotional space
-        vocab.forEach(word => {
+        limitedVocab.forEach(word => {
           if (this.embeddings.has(word)) {
             const emb = this.embeddings.get(word).slice(0, 8);
             const eSpace = this.kpca.transform([emb])[0];

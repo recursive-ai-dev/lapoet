@@ -50,35 +50,32 @@ class KernelPCA {
    */
   _centerKernelMatrix(K) {
     const n = K.length;
-    const ones = Array(n).fill().map(() => Array(n).fill(1 / n));
-    const result = Array(n).fill().map(() => Array(n).fill(0));
+    const rowMeans = Array(n).fill(0);
+    const colMeans = Array(n).fill(0);
+    let totalMean = 0;
 
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
-        let sum1 = 0, sum2 = 0, sum3 = 0;
-        
-        // 1_n*K term
-        for (let k = 0; k < n; k++) {
-          sum1 += ones[i][k] * K[k][j];
-        }
-        
-        // K*1_n term
-        for (let k = 0; k < n; k++) {
-          sum2 += K[i][k] * ones[k][j];
-        }
-        
-        // 1_n*K*1_n term
-        for (let k = 0; k < n; k++) {
-          for (let l = 0; l < n; l++) {
-            sum3 += ones[i][k] * K[k][l] * ones[l][j];
-          }
-        }
-        
-        result[i][j] = K[i][j] - sum1 - sum2 + sum3;
+        rowMeans[i] += K[i][j];
+        colMeans[j] += K[i][j];
+        totalMean += K[i][j];
       }
     }
-    
-    return result;
+
+    for (let i = 0; i < n; i++) {
+      rowMeans[i] /= n;
+      colMeans[i] /= n;
+    }
+    totalMean /= n * n;
+
+    const centered = Array(n).fill().map(() => Array(n).fill(0));
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        centered[i][j] = K[i][j] - rowMeans[i] - colMeans[j] + totalMean;
+      }
+    }
+
+    return centered;
   }
 
   /**
@@ -481,6 +478,7 @@ class AGTuneEngine {
     this.vocabulary = new Set();
     this.embeddings = new Map();
     this.emotionalSpace = new Map();
+    this.maxKernelWords = 1200; // cap to keep kernel matrix manageable
     this.isTrained = false;
     this._initializeReteRules();
   }
@@ -577,15 +575,19 @@ class AGTuneEngine {
       });
     });
     
-    const vocab = Object.entries(freq)
+    const vocabEntries = Object.entries(freq)
       .filter(([_, count]) => count >= 2) // Min frequency threshold
-      .map(([word, _]) => word);
+      .sort((a, b) => b[1] - a[1]);
     
-    this.vocabulary = new Set(vocab);
+    const limitedVocab = vocabEntries
+      .slice(0, this.maxKernelWords)
+      .map(([word]) => word);
+    
+    this.vocabulary = new Set(limitedVocab);
     
     // Initialize embeddings (co-occurrence based)
     const window = 3;
-    vocab.forEach(word => this.embeddings.set(word, Array(32).fill(0)));
+    limitedVocab.forEach(word => this.embeddings.set(word, Array(32).fill(0)));
     
     corpus.forEach(text => {
       const tokens = this._tokenize(text);
@@ -605,7 +607,7 @@ class AGTuneEngine {
     });
     
     // Train Kernel PCA on embeddings
-    const X = vocab.filter(w => this.embeddings.has(w)).map(w => {
+    const X = limitedVocab.filter(w => this.embeddings.has(w)).map(w => {
       const emb = this.embeddings.get(w);
       return emb.slice(0, Math.min(8, emb.length));
     });
@@ -614,7 +616,7 @@ class AGTuneEngine {
       this.kpca.fit(X);
       
       // Transform vocabulary to emotional space
-      vocab.forEach(word => {
+      limitedVocab.forEach(word => {
         if (this.embeddings.has(word)) {
           const emb = this.embeddings.get(word).slice(0, 8);
           const eSpace = this.kpca.transform([emb])[0];
