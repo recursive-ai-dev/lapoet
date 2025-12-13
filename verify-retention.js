@@ -13,6 +13,9 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Test configuration
+const TEST_WORDS = ['ghost', 'love', 'death', 'shadow', 'night']; // Words to verify across cycles
+
 // Minimal classes needed for verification
 class KernelPCA {
   constructor(nComponents = 8, degree = 3) {
@@ -125,7 +128,7 @@ async function main() {
   console.log(`✓ Trained: ${engine1.isTrained}`);
 
   // Extract sample data for comparison
-  const sampleWords = ['ghost', 'love', 'death', 'shadow', 'night'];
+  const sampleWords = TEST_WORDS;
   const originalVectors = new Map();
   const originalWeights = [...engine1.valueEstimator.weights];
 

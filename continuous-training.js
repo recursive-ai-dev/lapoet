@@ -13,6 +13,11 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Configuration constants
+const FILTERED_PATTERNS = ['icryafterikill']; // Song/album title patterns to filter
+const MIN_LINE_LENGTH = 10; // Minimum characters for a valid lyric line
+const TRACKED_WORDS = ['ghost', 'shadow', 'death']; // Words to track across sessions
+
 // Import the training utilities (simplified versions)
 class KernelPCA {
   constructor(nComponents = 8, degree = 3) {
@@ -370,7 +375,10 @@ async function loadLyricsSubset(files) {
     const content = fs.readFileSync(filepath, 'utf8');
     const lines = content.split('\n')
       .map(line => line.trim())
-      .filter(line => line.length > 10 && line !== 'icryafterikill');
+      .filter(line => {
+        return line.length > MIN_LINE_LENGTH && 
+               !FILTERED_PATTERNS.some(pattern => line === pattern);
+      });
     
     allLyrics.push(...lines);
   }
@@ -404,7 +412,7 @@ async function main() {
   console.log(`  ✓ Session 1 checkpoint saved`);
   
   // Track some words for verification
-  const trackedWords = ['ghost', 'shadow', 'death'];
+  const trackedWords = TRACKED_WORDS;
   const session1Vectors = new Map();
   trackedWords.forEach(word => {
     if (engine1.emotionalSpace.has(word)) {

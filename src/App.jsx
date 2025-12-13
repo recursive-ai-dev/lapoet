@@ -1066,16 +1066,14 @@ export default function AGTunePoet() {
   ];
 
   // Function to load lyrics from the lyrics folder
+  // Note: In browser environment, lyrics must be loaded via file upload
+  // The lyrics are pre-trained in the checkpoint file (agtune-lyrics-checkpoint.json)
+  // which can be loaded using the "Load Checkpoint" button
   const loadLyricsCorpus = useCallback(async () => {
-    try {
-      // In a real browser environment, we'd fetch these files
-      // For now, this serves as a placeholder for when lyrics are loaded via file upload
-      console.log('Lyrics corpus can be loaded via file upload or added to training data');
-      return embeddedCorpus;
-    } catch (error) {
-      console.error('Error loading lyrics:', error);
-      return embeddedCorpus;
-    }
+    // TODO: For server-side rendering, implement actual file system access
+    // For client-side, users should upload lyrics files or load pre-trained checkpoint
+    console.log('Lyrics corpus is embedded in checkpoint file. Use "Load Checkpoint" to load pre-trained model.');
+    return embeddedCorpus;
   }, []);
 
   const loadCorpus = useCallback(() => {

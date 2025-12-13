@@ -210,8 +210,8 @@ On typical hardware:
 ### Memory Usage
 
 - **Checkpoint Size**: ~1.7 MB for 1,675 words
-- **Runtime Memory**: ~50-100 MB during training
-- **Browser Memory**: ~20-30 MB for loaded model
+- **Training Memory**: ~50-100 MB during training phase
+- **Loaded Model Memory**: ~30-50 MB in browser after loading checkpoint
 
 ## Troubleshooting
 

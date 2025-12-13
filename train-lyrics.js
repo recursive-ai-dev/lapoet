@@ -13,6 +13,10 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Configuration constants
+const FILTERED_PATTERNS = ['icryafterikill']; // Song/album title patterns to filter
+const MIN_LINE_LENGTH = 10; // Minimum characters for a valid lyric line
+
 // ============================================================================
 // CORE ALGORITHM IMPLEMENTATIONS (Adapted for Node.js)
 // ============================================================================
@@ -410,7 +414,10 @@ async function loadAllLyrics() {
     // Split by lines and filter out empty lines and title lines
     const lines = content.split('\n')
       .map(line => line.trim())
-      .filter(line => line.length > 10 && line !== 'icryafterikill'); // Filter title and very short lines
+      .filter(line => {
+        return line.length > MIN_LINE_LENGTH && 
+               !FILTERED_PATTERNS.some(pattern => line === pattern);
+      });
     
     allLyrics.push(...lines);
     console.log(`  - ${file}: ${lines.length} lines`);
