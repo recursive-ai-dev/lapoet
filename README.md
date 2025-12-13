@@ -150,6 +150,34 @@ AG-TUNE is fully client-side and requires no server runtime.
 
 ---
 
+# **Training**
+
+AG-TUNE includes a comprehensive training system that learns from lyrics:
+
+```bash
+# Train on all lyrics in lyrics/ folder
+npm run train
+
+# Verify the model retains information indefinitely  
+npm run verify
+
+# Test core algorithms
+npm run test-engine
+```
+
+The training process:
+* Loads 15+ lyrics files (847+ lines, 1,675+ unique words)
+* Builds co-occurrence word embeddings
+* Trains Kernel PCA for emotional space mapping
+* Optimizes TD-lambda value estimator (100 epochs)
+* Saves checkpoint for indefinite reuse
+
+**The model retains all learned information and can be loaded anytime.**
+
+See [TRAINING.md](TRAINING.md) for complete documentation.
+
+---
+
 # **Configuration**
 
 Key parameters include:

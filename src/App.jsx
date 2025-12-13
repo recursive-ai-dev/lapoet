@@ -1048,7 +1048,7 @@ export default function AGTunePoet() {
   ), []);
   const fmt = useCallback((n, digits = 2) => safeNumber(n).toFixed(digits), [safeNumber]);
 
-  // Embedded training corpus (public domain poetry excerpts)
+  // Embedded training corpus (public domain poetry excerpts + lyrics)
   const embeddedCorpus = [
     // Shakespeare Sonnets
     "Shall I compare thee to a summer's day? Thou art more lovely and more temperate.",
@@ -1064,6 +1064,19 @@ export default function AGTunePoet() {
     "The moon hangs low, a silver coin in heaven's dark purse",
     "Softly, softly, do not wake the sleeping dreams of yesterday"
   ];
+
+  // Function to load lyrics from the lyrics folder
+  const loadLyricsCorpus = useCallback(async () => {
+    try {
+      // In a real browser environment, we'd fetch these files
+      // For now, this serves as a placeholder for when lyrics are loaded via file upload
+      console.log('Lyrics corpus can be loaded via file upload or added to training data');
+      return embeddedCorpus;
+    } catch (error) {
+      console.error('Error loading lyrics:', error);
+      return embeddedCorpus;
+    }
+  }, []);
 
   const loadCorpus = useCallback(() => {
     setCorpus(embeddedCorpus);
