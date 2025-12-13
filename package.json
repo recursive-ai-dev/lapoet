@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "train": "node train-lyrics.js",
     "verify": "node verify-retention.js",
-    "test-engine": "node test-engine.js"
+    "test-engine": "node test-engine.js",
+    "continuous": "node continuous-training.js"
   },
   "dependencies": {
     "react": "^18.2.0",
