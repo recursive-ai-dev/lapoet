@@ -604,19 +604,33 @@ class AGTuneEngine {
   /**
    * Train on poetry corpus
    * Builds vocabulary, embeddings, and trains Kernel PCA + TD estimator
+   * @param {Array} corpus - Array of text lines to train on
+   * @param {number} epochs - Number of training epochs
+   * @param {boolean} incremental - If true, expands existing vocabulary rather than replacing it
    */
-  train(corpus, epochs = 10) {
+  train(corpus, epochs = 10, incremental = false) {
     const corpusSignature = this._corpusSignature(corpus);
     const shouldRebuild = this.lastCorpusSignature !== corpusSignature || !this.isTrained;
 
     if (shouldRebuild) {
-      this.embeddings.clear();
-      this.emotionalSpace.clear();
+      // Only clear if not doing incremental training
+      if (!incremental) {
+        this.embeddings.clear();
+        this.emotionalSpace.clear();
+      }
     }
 
     // Build frequency-based vocabulary
     if (shouldRebuild) {
       const freq = {};
+      
+      // Start with existing vocabulary if incremental
+      if (incremental) {
+        this.vocabulary.forEach(word => {
+          freq[word] = 1; // Ensure existing words are retained
+        });
+      }
+      
       corpus.forEach(text => {
         this._tokenize(text).forEach(word => {
           freq[word] = (freq[word] || 0) + 1;
@@ -624,7 +638,7 @@ class AGTuneEngine {
       });
       
       const vocabEntries = Object.entries(freq)
-        .filter(([_, count]) => count >= 2) // Min frequency threshold
+        .filter(([_, count]) => count >= (incremental ? 1 : 2)) // Lower threshold for incremental
         .sort((a, b) => b[1] - a[1]);
 
       const limitedVocab = vocabEntries
@@ -635,7 +649,11 @@ class AGTuneEngine {
       
       // Initialize embeddings (co-occurrence based)
       const window = 3;
-      limitedVocab.forEach(word => this.embeddings.set(word, Array(64).fill(0)));
+      limitedVocab.forEach(word => {
+        if (!this.embeddings.has(word)) {
+          this.embeddings.set(word, Array(64).fill(0));
+        }
+      });
       
       corpus.forEach(text => {
         const tokens = this._tokenize(text);
