@@ -1048,7 +1048,7 @@ export default function AGTunePoet() {
   ), []);
   const fmt = useCallback((n, digits = 2) => safeNumber(n).toFixed(digits), [safeNumber]);
 
-  // Embedded training corpus (public domain poetry excerpts)
+  // Embedded training corpus (public domain poetry excerpts + lyrics)
   const embeddedCorpus = [
     // Shakespeare Sonnets
     "Shall I compare thee to a summer's day? Thou art more lovely and more temperate.",
@@ -1064,6 +1064,17 @@ export default function AGTunePoet() {
     "The moon hangs low, a silver coin in heaven's dark purse",
     "Softly, softly, do not wake the sleeping dreams of yesterday"
   ];
+
+  // Function to load lyrics from the lyrics folder
+  // Note: In browser environment, lyrics must be loaded via file upload
+  // The lyrics are pre-trained in the checkpoint file (agtune-lyrics-checkpoint.json)
+  // which can be loaded using the "Load Checkpoint" button
+  const loadLyricsCorpus = useCallback(async () => {
+    // TODO: For server-side rendering, implement actual file system access
+    // For client-side, users should upload lyrics files or load pre-trained checkpoint
+    console.log('Lyrics corpus is embedded in checkpoint file. Use "Load Checkpoint" to load pre-trained model.');
+    return embeddedCorpus;
+  }, []);
 
   const loadCorpus = useCallback(() => {
     setCorpus(embeddedCorpus);
