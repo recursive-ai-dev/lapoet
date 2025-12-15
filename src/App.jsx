@@ -627,7 +627,8 @@ class AGTuneEngine {
       // Start with existing vocabulary if incremental
       if (incremental) {
         this.vocabulary.forEach(word => {
-          freq[word] = 1; // Ensure existing words are retained
+          // Set to 1 to ensure retention (actual frequency only used for filtering/sorting)
+          freq[word] = 1;
         });
       }
       

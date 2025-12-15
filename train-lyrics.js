@@ -408,6 +408,7 @@ class AGTuneEngine {
 async function loadPretrainingData() {
   const pretrainingDir = path.join(__dirname, 'pretraining');
   
+  // Using synchronous fs calls for simplicity in CLI training script
   if (!fs.existsSync(pretrainingDir)) {
     console.log('\nNo pretraining directory found, skipping pre-training phase.');
     return [];
@@ -504,7 +505,8 @@ async function main() {
   console.log('='.repeat(70));
   
   const epochs = 100; // Extensive training to ensure retention
-  const avgReward = engine.train(lyrics, epochs, pretrainingData.length > 0);
+  const isIncremental = pretrainingData.length > 0; // Preserve pre-training if it was done
+  const avgReward = engine.train(lyrics, epochs, isIncremental);
   
   console.log('\n' + '='.repeat(70));
   console.log('FINE-TUNING COMPLETE');
