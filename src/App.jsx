@@ -27,7 +27,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
  * Transforms word embeddings into emotional/thematic space using polynomial kernel
  */
 class KernelPCA {
-  constructor(nComponents = 8, degree = 3) {
+  constructor(nComponents = 12, degree = 3) {
     this.nComponents = nComponents;
     this.degree = degree;
     this.eigenvectors = null;
@@ -176,7 +176,7 @@ class KernelPCA {
  * Estimates aesthetic value of poetic states for reinforcement learning
  */
 class TDValueEstimator {
-  constructor(nFeatures = 16, alpha = 0.01, gamma = 0.95, lambda = 0.8) {
+  constructor(nFeatures = 24, alpha = 0.01, gamma = 0.95, lambda = 0.8) {
     this.weights = Array(nFeatures).fill(0).map(() => Math.random() * 0.01);
     this.alpha = alpha;
     this.gamma = gamma;
@@ -200,7 +200,7 @@ class TDValueEstimator {
     const eSpaceCenter = state.eSpaceTraj.reduce((acc, vec) => {
       vec.forEach((v, i) => acc[i] = (acc[i] || 0) + v);
       return acc;
-    }, Array(state.eSpaceTraj[0]?.length || 8).fill(0));
+    }, Array(state.eSpaceTraj[0]?.length || 12).fill(0));
 
     eSpaceCenter.forEach(v => features.push(v / (state.eSpaceTraj.length || 1)));
 
@@ -475,15 +475,15 @@ class FFTMeterAnalyzer {
  */
 class AGTuneEngine {
   constructor() {
-    this.kpca = new KernelPCA(8, 3);
-    this.valueEstimator = new TDValueEstimator(16, 0.01, 0.95, 0.8);
+    this.kpca = new KernelPCA(12, 3);
+    this.valueEstimator = new TDValueEstimator(24, 0.01, 0.95, 0.8);
     this.rng = new LaggedFibonacciGenerator();
     this.rete = new ReteEngine();
     this.parser = new CYKParser(this._getGrammar());
     this.vocabulary = new Set();
     this.embeddings = new Map();
     this.emotionalSpace = new Map();
-    this.maxKernelWords = 1200; // cap to keep kernel matrix manageable
+    this.maxKernelWords = 2500; // cap to keep kernel matrix manageable
     this.lastCorpusSignature = null;
     this.isTrained = false;
     this._initializeReteRules();
@@ -635,7 +635,7 @@ class AGTuneEngine {
       
       // Initialize embeddings (co-occurrence based)
       const window = 3;
-      limitedVocab.forEach(word => this.embeddings.set(word, Array(32).fill(0)));
+      limitedVocab.forEach(word => this.embeddings.set(word, Array(64).fill(0)));
       
       corpus.forEach(text => {
         const tokens = this._tokenize(text);
@@ -657,7 +657,7 @@ class AGTuneEngine {
       // Train Kernel PCA on embeddings
       const X = limitedVocab.filter(w => this.embeddings.has(w)).map(w => {
         const emb = this.embeddings.get(w);
-        return emb.slice(0, Math.min(8, emb.length));
+        return emb.slice(0, Math.min(12, emb.length));
       });
       
       if (X.length > 0) {
@@ -666,7 +666,7 @@ class AGTuneEngine {
         // Transform vocabulary to emotional space
         limitedVocab.forEach(word => {
           if (this.embeddings.has(word)) {
-            const emb = this.embeddings.get(word).slice(0, 8);
+            const emb = this.embeddings.get(word).slice(0, 12);
             const eSpace = this.kpca.transform([emb])[0];
             this.emotionalSpace.set(word, eSpace);
           }
@@ -772,7 +772,7 @@ class AGTuneEngine {
 
     const embeddingEntries = Array.isArray(data.embeddings) ? data.embeddings : [];
     this.embeddings = new Map(
-      embeddingEntries.map(([k, v]) => [k, this._asNumberArray(v, 32, 0)])
+      embeddingEntries.map(([k, v]) => [k, this._asNumberArray(v, 64, 0)])
     );
 
     const emotionalEntries = Array.isArray(data.emotionalSpace) ? data.emotionalSpace : [];
@@ -801,7 +801,7 @@ class AGTuneEngine {
     const words = this._tokenize(currentLine);
     
     return {
-      eSpaceTraj: eSpaceTraj.length > 0 ? eSpaceTraj : [Array(8).fill(0)],
+      eSpaceTraj: eSpaceTraj.length > 0 ? eSpaceTraj : [Array(12).fill(0)],
       meterScore: FFTMeterAnalyzer.analyzeStressPattern(this._getStressPattern(words)),
       rhymeConsistency: this._checkRhymeConsistency(tokens),
       novelty: 1 - this._calculateRepetitionScore(tokens),
@@ -862,7 +862,7 @@ class AGTuneEngine {
     
     // Score by emotional space proximity to last word
     const lastWord = context[context.length - 1];
-    const lastESpace = this.emotionalSpace.get(lastWord) || Array(8).fill(0);
+    const lastESpace = this.emotionalSpace.get(lastWord) || Array(12).fill(0);
     
     const scored = candidates.map(word => {
       const eSpace = this.emotionalSpace.get(word);
@@ -878,7 +878,7 @@ class AGTuneEngine {
     
     return scored
       .sort((a, b) => b.score - a.score)
-      .slice(0, beamWidth * 3)
+      .slice(0, beamWidth * 5)
       .map(c => c.word);
   }
 
@@ -1033,7 +1033,7 @@ export default function AGTunePoet() {
   const [parameters, setParameters] = useState({
     epochs: 5,
     lines: 4,
-    beamWidth: 5,
+    beamWidth: 8,
     prompt: "whispers in the moonlight"
   });
   const [visualizations, setVisualizations] = useState({
@@ -1055,6 +1055,18 @@ export default function AGTunePoet() {
     "When in disgrace with fortune and men's eyes I all alone beweep my outcast state,",
     "Let me not to the marriage of true minds admit impediments. Love is not love",
     "That time of year thou mayst in me behold when yellow leaves, or none, or few, do hang",
+    "Full many a glorious morning have I seen flatter the mountain tops with sovereign eye",
+    "Being your slave what should I do but tend upon the hours and times of your desire",
+    "No longer mourn for me when I am dead than you shall hear the surly sullen bell",
+    "That thou art blamed shall not be thy defect for slander's mark was ever yet the fair",
+    
+    // Romantic Era Poetry
+    "I wandered lonely as a cloud that floats on high over vales and hills",
+    "Season of mists and mellow fruitfulness close bosom friend of the maturing sun",
+    "Tyger tyger burning bright in the forests of the night what immortal hand or eye",
+    "She walks in beauty like the night of cloudless climes and starry skies",
+    "The woods are lovely dark and deep but I have promises to keep",
+    "Because I could not stop for death he kindly stopped for me",
     
     // Additional poetic corpus
     "The darkling night whispers secrets to the stars above the silent sea",
@@ -1062,7 +1074,16 @@ export default function AGTunePoet() {
     "Love's fire burns eternal in the soul's deepest shadow",
     "Time's swift river carries all dreams into the void",
     "The moon hangs low, a silver coin in heaven's dark purse",
-    "Softly, softly, do not wake the sleeping dreams of yesterday"
+    "Softly, softly, do not wake the sleeping dreams of yesterday",
+    "Ancient winds carry tales of forgotten kingdoms lost to time",
+    "In twilight's embrace we find the courage to dream beyond tomorrow",
+    "Silent echoes of a thousand voices crying out for peace",
+    "The mirror reflects not my face but the ghost of who I was",
+    "Beneath the weeping willow I found solace in sorrow's song",
+    "Dancing shadows paint the walls with memories of brighter days",
+    "Crystal tears fall like rain upon the garden of my heart",
+    "In darkness blooms a flower that knows no fear of night",
+    "The compass spins eternal seeking true north in the storm"
   ];
 
   const loadCorpus = useCallback(() => {
@@ -1250,7 +1271,7 @@ export default function AGTunePoet() {
             <input
               type="range"
               min="1"
-              max="20"
+              max="50"
               value={parameters.epochs}
               onChange={(e) => setParameters(prev => ({
                 ...prev,
@@ -1319,7 +1340,7 @@ export default function AGTunePoet() {
             <input 
               type="range" 
               min="2" 
-              max="8" 
+              max="16" 
               value={parameters.lines}
               onChange={(e) => setParameters(prev => ({
                 ...prev, 
@@ -1333,7 +1354,7 @@ export default function AGTunePoet() {
             <input 
               type="range" 
               min="3" 
-              max="10" 
+              max="20" 
               value={parameters.beamWidth}
               onChange={(e) => setParameters(prev => ({
                 ...prev, 
