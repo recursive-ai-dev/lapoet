@@ -18,7 +18,9 @@ if (!fs.existsSync(checkpointPath)) {
 }
 
 const checkpoint = JSON.parse(fs.readFileSync(checkpointPath, 'utf8'));
+// Checkpoint vocabulary is stored as array of [word, frequency] pairs
 const vocabulary = new Map(checkpoint.vocabulary);
+const vocabWords = new Set(checkpoint.vocabulary.map(([word, _]) => word));
 
 console.log('='.repeat(70));
 console.log('AG-TUNE PRE-TRAINED MODEL DEMONSTRATION');
@@ -58,7 +60,7 @@ const found = [];
 const missing = [];
 
 commonEnglishWords.forEach(word => {
-  if (vocabulary.has(word)) {
+  if (vocabWords.has(word)) {
     foundCount++;
     found.push(word);
   } else {
@@ -96,7 +98,7 @@ const lyricFound = [];
 const lyricMissing = [];
 
 lyricWords.forEach(word => {
-  if (vocabulary.has(word)) {
+  if (vocabWords.has(word)) {
     lyricFoundCount++;
     lyricFound.push(word);
   } else {
@@ -124,11 +126,12 @@ if (lyricMissing.length > 0) {
 console.log('📖 TOP 50 MOST FREQUENT WORDS');
 console.log('-'.repeat(70));
 
-const sortedVocab = Array.from(vocabulary.entries())
+// Sort by frequency (vocabulary is already [word, freq] pairs)
+const sortedVocab = checkpoint.vocabulary
   .sort((a, b) => b[1] - a[1])
   .slice(0, 50);
 
-console.log(sortedVocab.map((([word, freq]) => word)).join(', '));
+console.log(sortedVocab.map(([word, _]) => word).join(', '));
 console.log();
 
 // Categorize vocabulary
@@ -143,7 +146,7 @@ let sharedCount = 0;
 const englishSet = new Set(commonEnglishWords);
 const lyricSet = new Set(lyricWords);
 
-vocabulary.forEach((freq, word) => {
+vocabWords.forEach(word => {
   const inEnglish = englishSet.has(word);
   const inLyric = lyricSet.has(word);
   
@@ -159,7 +162,7 @@ vocabulary.forEach((freq, word) => {
 console.log(`English Common Words: ${englishCommonCount} (from test set)`);
 console.log(`Lyric-Specific Words: ${lyricSpecificCount} (from test set)`);
 console.log(`Shared Words: ${sharedCount} (in both sets)`);
-console.log(`Other Words: ${vocabulary.size - englishCommonCount - lyricSpecificCount - sharedCount}`);
+console.log(`Other Words: ${vocabWords.size - englishCommonCount - lyricSpecificCount - sharedCount}`);
 console.log();
 
 // Final assessment
