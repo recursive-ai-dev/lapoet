@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "jest",
     "train": "node train-lyrics.js",
     "verify": "node verify-retention.js",
     "test-engine": "node test-engine.js",
