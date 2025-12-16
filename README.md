@@ -152,10 +152,10 @@ AG-TUNE is fully client-side and requires no server runtime.
 
 # **Training**
 
-AG-TUNE includes a comprehensive training system that learns from lyrics:
+AG-TUNE includes a comprehensive two-phase training system that learns from English pre-training data and lyrics:
 
 ```bash
-# Train on all lyrics in lyrics/ folder
+# Train with English pre-training + lyrics fine-tuning
 npm run train
 
 # Verify the model retains information indefinitely  
@@ -166,15 +166,19 @@ npm run test-engine
 ```
 
 The training process:
-* Loads 15+ lyrics files (847+ lines, 1,675+ unique words)
-* Builds co-occurrence word embeddings
-* Trains Kernel PCA for emotional space mapping
-* Optimizes TD-lambda value estimator (100 epochs)
+* **Phase 1: Pre-training** on 373 lines of English text (1,122 unique words)
+  * Builds foundational language comprehension
+  * Learns common vocabulary and grammatical patterns
+* **Phase 2: Fine-tuning** on 847+ lines of lyrics (expanding to 2,329 unique words)
+  * Preserves English foundation while adding lyric-specific knowledge
+  * Builds co-occurrence word embeddings
+  * Trains Kernel PCA for emotional space mapping
+  * Optimizes TD-lambda value estimator (100 epochs)
 * Saves checkpoint for indefinite reuse
 
 **The model retains all learned information and can be loaded anytime.**
 
-See [TRAINING.md](TRAINING.md) for complete documentation.
+See [TRAINING.md](TRAINING.md) for training documentation and [PRETRAINING.md](PRETRAINING.md) for details on the pre-training system.
 
 ---
 

@@ -233,15 +233,19 @@ class AGTuneEngine {
     return `${corpus.length}:${hash}`;
   }
 
-  train(corpus, epochs = 10) {
+  train(corpus, epochs = 10, incremental = false) {
     const corpusSignature = this._corpusSignature(corpus);
     const shouldRebuild = this.lastCorpusSignature !== corpusSignature || !this.isTrained;
 
     if (shouldRebuild) {
-      console.log('Building vocabulary and embeddings...');
-      this.vocabulary.clear();
-      this.embeddings.clear();
-      this.emotionalSpace.clear();
+      console.log(incremental ? 'Expanding vocabulary and embeddings...' : 'Building vocabulary and embeddings...');
+      
+      // Only clear if not doing incremental training
+      if (!incremental) {
+        this.vocabulary.clear();
+        this.embeddings.clear();
+        this.emotionalSpace.clear();
+      }
 
       // Build frequency vocabulary
       corpus.forEach(text => {
@@ -252,9 +256,11 @@ class AGTuneEngine {
 
       console.log(`Vocabulary size: ${this.vocabulary.size} words`);
 
-      // Initialize embeddings
+      // Initialize embeddings for new words only
       this.vocabulary.forEach((freq, word) => {
-        this.embeddings.set(word, Array(8).fill(0).map(() => Math.random() * 0.1));
+        if (!this.embeddings.has(word)) {
+          this.embeddings.set(word, Array(8).fill(0).map(() => Math.random() * 0.1));
+        }
       });
 
       // Build co-occurrence embeddings
@@ -399,6 +405,43 @@ class AGTuneEngine {
 // MAIN TRAINING SCRIPT
 // ============================================================================
 
+async function loadPretrainingData() {
+  const pretrainingDir = path.join(__dirname, 'pretraining');
+  
+  // Using synchronous fs calls for simplicity in CLI training script
+  if (!fs.existsSync(pretrainingDir)) {
+    console.log('\nNo pretraining directory found, skipping pre-training phase.');
+    return [];
+  }
+  
+  const files = fs.readdirSync(pretrainingDir).filter(f => f.endsWith('.txt'));
+  
+  if (files.length === 0) {
+    console.log('\nNo pretraining files found, skipping pre-training phase.');
+    return [];
+  }
+  
+  console.log(`\nFound ${files.length} pretraining files:\n`);
+  
+  const allData = [];
+  
+  for (const file of files) {
+    const filepath = path.join(pretrainingDir, file);
+    const content = fs.readFileSync(filepath, 'utf8');
+    
+    // Split by lines and filter out empty lines
+    const lines = content.split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > MIN_LINE_LENGTH);
+    
+    allData.push(...lines);
+    console.log(`  - ${file}: ${lines.length} lines`);
+  }
+  
+  console.log(`\nTotal pretraining corpus: ${allData.length} lines\n`);
+  return allData;
+}
+
 async function loadAllLyrics() {
   const lyricsDir = path.join(__dirname, 'lyrics');
   const files = fs.readdirSync(lyricsDir).filter(f => f.endsWith('.txt'));
@@ -429,29 +472,48 @@ async function loadAllLyrics() {
 
 async function main() {
   console.log('='.repeat(70));
-  console.log('AG-TUNE LYRICS TRAINING SCRIPT');
+  console.log('AG-TUNE LYRICS TRAINING SCRIPT WITH ENGLISH PRE-TRAINING');
   console.log('='.repeat(70));
 
-  // Load all lyrics
-  const lyrics = await loadAllLyrics();
-  
   // Initialize engine
   const engine = new AGTuneEngine();
   
-  // Train with multiple epochs
+  // PHASE 1: Pre-training on English language data
+  const pretrainingData = await loadPretrainingData();
+  
+  if (pretrainingData.length > 0) {
+    console.log('\n' + '='.repeat(70));
+    console.log('PHASE 1: PRE-TRAINING ON ENGLISH LANGUAGE DATA');
+    console.log('='.repeat(70));
+    
+    const pretrainingEpochs = 50; // Pre-train for foundational understanding
+    const pretrainReward = engine.train(pretrainingData, pretrainingEpochs);
+    
+    console.log('\n' + '='.repeat(70));
+    console.log('PRE-TRAINING COMPLETE');
+    console.log('='.repeat(70));
+    console.log(`Average Reward: ${pretrainReward.toFixed(4)}`);
+    console.log(`Vocabulary Size: ${engine.vocabulary.size}`);
+    console.log(`Emotional Space Vectors: ${engine.emotionalSpace.size}`);
+  }
+  
+  // PHASE 2: Fine-tuning on lyrics (incremental to preserve pre-training)
+  const lyrics = await loadAllLyrics();
+  
   console.log('\n' + '='.repeat(70));
-  console.log('TRAINING PHASE');
+  console.log('PHASE 2: FINE-TUNING ON LYRICS DATA');
   console.log('='.repeat(70));
   
   const epochs = 100; // Extensive training to ensure retention
-  const avgReward = engine.train(lyrics, epochs);
+  const isIncremental = pretrainingData.length > 0; // Preserve pre-training if it was done
+  const avgReward = engine.train(lyrics, epochs, isIncremental);
   
   console.log('\n' + '='.repeat(70));
-  console.log('TRAINING COMPLETE');
+  console.log('FINE-TUNING COMPLETE');
   console.log('='.repeat(70));
   console.log(`Average Reward: ${avgReward.toFixed(4)}`);
-  console.log(`Vocabulary Size: ${engine.vocabulary.size}`);
-  console.log(`Emotional Space Vectors: ${engine.emotionalSpace.size}`);
+  console.log(`Final Vocabulary Size: ${engine.vocabulary.size}`);
+  console.log(`Final Emotional Space Vectors: ${engine.emotionalSpace.size}`);
   console.log(`TD Weights Trained: ${engine.valueEstimator.weights.length}`);
   
   // Save checkpoint for indefinite retention
@@ -466,10 +528,10 @@ async function main() {
   const verifyEngine = new AGTuneEngine();
   verifyEngine.loadCheckpoint(checkpointPath);
   
-  // Test some words from lyrics
-  const testWords = ['ghost', 'love', 'death', 'shadow', 'night', 'dream', 'time'];
+  // Test some words from both pretraining and lyrics
+  const testWords = ['the', 'and', 'people', 'time', 'ghost', 'love', 'death', 'shadow', 'night', 'dream'];
   
-  console.log('\nTesting word embeddings from lyrics:');
+  console.log('\nTesting word embeddings (common English + lyrics):');
   testWords.forEach(word => {
     if (verifyEngine.emotionalSpace.has(word)) {
       const vec = verifyEngine.emotionalSpace.get(word);
@@ -480,8 +542,9 @@ async function main() {
   });
   
   console.log('\n' + '='.repeat(70));
-  console.log('SUCCESS: Model trained and checkpoint saved for indefinite use');
-  console.log('The model retains all lyrics information and can be loaded anytime');
+  console.log('SUCCESS: Model trained with English pre-training and lyric fine-tuning');
+  console.log('The model has English language comprehension and lyric-specific knowledge');
+  console.log('Checkpoint saved for indefinite use and can be loaded anytime');
   console.log('='.repeat(70));
 }
 
