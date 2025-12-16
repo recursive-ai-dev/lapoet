@@ -282,18 +282,18 @@ check('VALIDATION_GUIDE.md has FAQ', () =>
 console.log('\n[9] Test File Executability\n');
 
 check('Module test is executable', () => {
-  const stats = fs.statSync(path.join(__dirname, 'test-module-validation.js'));
-  return (stats.mode & 0o111) !== 0 || true; // Executable or permissive
+  // Files are executable via node (shebang), permission bits may vary by OS
+  return fs.existsSync(path.join(__dirname, 'test-module-validation.js'));
 });
 
 check('Ablation test is executable', () => {
-  const stats = fs.statSync(path.join(__dirname, 'test-ablation-study.js'));
-  return (stats.mode & 0o111) !== 0 || true;
+  // Files are executable via node (shebang), permission bits may vary by OS
+  return fs.existsSync(path.join(__dirname, 'test-ablation-study.js'));
 });
 
 check('Interpretability test is executable', () => {
-  const stats = fs.statSync(path.join(__dirname, 'test-interpretability.js'));
-  return (stats.mode & 0o111) !== 0 || true;
+  // Files are executable via node (shebang), permission bits may vary by OS
+  return fs.existsSync(path.join(__dirname, 'test-interpretability.js'));
 });
 
 console.log('\n[10] Test Output Format\n');

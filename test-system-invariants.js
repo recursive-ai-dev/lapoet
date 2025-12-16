@@ -52,6 +52,9 @@ const emotionalSpace = new Map(checkpointData.emotionalSpace);
 // ============================================================================
 
 function euclideanDistance(a, b) {
+  if (a.length !== b.length) {
+    throw new Error(`Array length mismatch: ${a.length} vs ${b.length}`);
+  }
   return Math.sqrt(a.reduce((sum, ai, i) => sum + Math.pow(ai - b[i], 2), 0));
 }
 

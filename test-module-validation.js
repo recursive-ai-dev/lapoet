@@ -312,13 +312,25 @@ class TDValueEstimator {
 // ============================================================================
 
 function cosineSimilarity(a, b) {
+  if (a.length !== b.length) {
+    throw new Error(`Array length mismatch: ${a.length} vs ${b.length}`);
+  }
   const dotProduct = a.reduce((sum, ai, i) => sum + ai * b[i], 0);
   const normA = Math.sqrt(a.reduce((sum, ai) => sum + ai * ai, 0));
   const normB = Math.sqrt(b.reduce((sum, bi) => sum + bi * bi, 0));
+  
+  // Handle zero vectors
+  if (normA === 0 || normB === 0) {
+    return 0;
+  }
+  
   return dotProduct / (normA * normB);
 }
 
 function euclideanDistance(a, b) {
+  if (a.length !== b.length) {
+    throw new Error(`Array length mismatch: ${a.length} vs ${b.length}`);
+  }
   return Math.sqrt(a.reduce((sum, ai, i) => sum + Math.pow(ai - b[i], 2), 0));
 }
 
