@@ -88,7 +88,8 @@ class KernelPCA {
     const eigenvalues = [];
     
     for (let k = 0; k < Math.min(this.nComponents, n); k++) {
-      // Initialize random vector
+      // Initialize random vector for PCA eigenvalue decomposition
+      // Math.random() is acceptable here: used for ML initialization, not cryptographic purposes
       let v = Array(n).fill().map(() => Math.random() - 0.5);
       
       // Gram-Schmidt orthogonalization against previous eigenvectors
@@ -177,6 +178,7 @@ class KernelPCA {
  */
 class TDValueEstimator {
   constructor(nFeatures = 24, alpha = 0.01, gamma = 0.95, lambda = 0.8) {
+    // Math.random() is acceptable here: used for neural network weight initialization, not cryptographic purposes
     this.weights = Array(nFeatures).fill(0).map(() => Math.random() * 0.01);
     this.alpha = alpha;
     this.gamma = gamma;
@@ -885,6 +887,7 @@ class AGTuneEngine {
     
     const scored = candidates.map(word => {
       const eSpace = this.emotionalSpace.get(word);
+      // Math.random() is acceptable here: used for fallback scoring in ML algorithm, not cryptographic purposes
       if (!eSpace) return { word, score: Math.random() };
       
       const dist = Math.sqrt(eSpace.reduce((sum, v, i) => {
