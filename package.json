@@ -12,7 +12,13 @@
     "verify": "node verify-retention.js",
     "test-engine": "node test-engine.js",
     "continuous": "node continuous-training.js",
-    "demo": "node demo-pretrained.js"
+    "demo": "node demo-pretrained.js",
+    "test-modules": "node test-module-validation.js",
+    "test-invariants": "node test-system-invariants.js",
+    "test-ablation": "node test-ablation-study.js",
+    "test-interpretability": "node test-interpretability.js",
+    "test-validation-framework": "node test-validation-framework.js",
+    "test-all": "npm run test-engine && npm run test-modules && npm run test-ablation && npm run test-interpretability && npm run test-validation-framework"
   },
   "dependencies": {
     "react": "^18.2.0",

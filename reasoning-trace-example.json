@@ -1,0 +1,108 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "engine": "AG-TUNE",
+    "timestamp": "2025-12-17T01:10:52.740Z",
+    "description": "Example reasoning trace for interpretability validation"
+  },
+  "trace": {
+    "line": "shadows dance beneath the moon",
+    "timestamp": "2025-12-17T01:10:52.738Z",
+    "emotionalVector": [
+      0.32,
+      -0.15,
+      0.48,
+      -0.22,
+      0.61,
+      0.08,
+      -0.33,
+      0.19
+    ],
+    "emotionalContinuity": 0.23,
+    "rulesFired": [
+      {
+        "ruleName": "prefer_imagery",
+        "priority": 5,
+        "satisfied": true
+      },
+      {
+        "ruleName": "avoid_cliche",
+        "priority": 4,
+        "satisfied": true
+      },
+      {
+        "ruleName": "maintain_theme_darkness",
+        "priority": 3,
+        "satisfied": true
+      }
+    ],
+    "constraintsViolated": [],
+    "tdRewardDelta": 0.15,
+    "tdValueEstimate": 0.73,
+    "beamCandidates": [
+      {
+        "token": "shadows",
+        "emotionalScore": 0.82,
+        "meterScore": 0.75,
+        "aestheticScore": 0.78,
+        "grammarValid": true,
+        "totalScore": 0.79,
+        "selected": true
+      },
+      {
+        "token": "darkness",
+        "emotionalScore": 0.85,
+        "meterScore": 0.65,
+        "aestheticScore": 0.7,
+        "grammarValid": true,
+        "totalScore": 0.73,
+        "selected": false
+      },
+      {
+        "token": "whispers",
+        "emotionalScore": 0.75,
+        "meterScore": 0.8,
+        "aestheticScore": 0.72,
+        "grammarValid": true,
+        "totalScore": 0.76,
+        "selected": false
+      }
+    ],
+    "beamSelectionRationale": "Selected \"shadows\" for optimal multi-objective score (0.79)",
+    "meterAnalysis": {
+      "stressPattern": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ],
+      "fftDominantFreq": 4,
+      "meterScore": 0.75,
+      "meterType": "iambic"
+    },
+    "grammarValidation": {
+      "cykAccepted": true,
+      "parseTree": "S -> NP VP | NP -> N | VP -> V PP",
+      "rulesUsed": [
+        "S->NP VP",
+        "NP->N",
+        "VP->V PP",
+        "PP->P NP"
+      ]
+    },
+    "cycleDetection": {
+      "cycleDetected": false,
+      "cycleLength": 0,
+      "tokensInCycle": []
+    },
+    "noveltyMetrics": {
+      "ngramOverlap": 0.12,
+      "vocabularyDiversity": 0.89,
+      "surpriseValue": 0.68
+    }
+  }
+}
