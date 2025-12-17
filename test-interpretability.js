@@ -93,7 +93,37 @@ Object.entries(reasoningTraceSchema).forEach(([field, type]) => {
   console.log(`  • ${field}: ${typeof type === 'object' ? 'object' : type}`);
 });
 
+// Validation function for reasoning trace
+function validateReasoningTrace(trace) {
+  const errors = [];
+  
+  // Check required string fields
+  if (typeof trace.line !== 'string') errors.push('line must be string');
+  if (typeof trace.timestamp !== 'string') errors.push('timestamp must be string');
+  if (typeof trace.beamSelectionRationale !== 'string') errors.push('beamSelectionRationale must be string');
+  
+  // Check required number fields
+  if (typeof trace.emotionalContinuity !== 'number') errors.push('emotionalContinuity must be number');
+  if (typeof trace.tdRewardDelta !== 'number') errors.push('tdRewardDelta must be number');
+  if (typeof trace.tdValueEstimate !== 'number') errors.push('tdValueEstimate must be number');
+  
+  // Check array fields
+  if (!Array.isArray(trace.emotionalVector)) errors.push('emotionalVector must be array');
+  if (!Array.isArray(trace.rulesFired)) errors.push('rulesFired must be array');
+  if (!Array.isArray(trace.constraintsViolated)) errors.push('constraintsViolated must be array');
+  if (!Array.isArray(trace.beamCandidates)) errors.push('beamCandidates must be array');
+  
+  // Check object fields
+  if (typeof trace.meterAnalysis !== 'object') errors.push('meterAnalysis must be object');
+  if (typeof trace.grammarValidation !== 'object') errors.push('grammarValidation must be object');
+  if (typeof trace.cycleDetection !== 'object') errors.push('cycleDetection must be object');
+  if (typeof trace.noveltyMetrics !== 'object') errors.push('noveltyMetrics must be object');
+  
+  return { valid: errors.length === 0, errors };
+}
+
 console.log('\n✓ Schema defines comprehensive reasoning trace');
+console.log('✓ Schema validation function implemented');
 console.log('✓ Every algorithmic decision can be logged');
 console.log('✓ Traces can be exported for offline analysis\n');
 
@@ -178,6 +208,15 @@ const exampleTrace = {
     surpriseValue: 0.68         // Moderate surprise
   }
 };
+
+// Validate the example trace
+const validation = validateReasoningTrace(exampleTrace);
+if (!validation.valid) {
+  console.log('⚠️  Example trace validation errors:');
+  validation.errors.forEach(err => console.log(`  - ${err}`));
+} else {
+  console.log('✓ Example trace validates against schema\n');
+}
 
 console.log('Generated Line: "' + exampleTrace.line + '"');
 console.log('\nEmotional State:');

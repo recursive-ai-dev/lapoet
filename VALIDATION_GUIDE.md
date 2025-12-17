@@ -367,7 +367,7 @@ A: Yes, but currently they run sequentially. Parallelization could be added.
 A: The test needs to be fixed. All tests should be 100% deterministic.
 
 **Q: Can I modify test thresholds to make tests pass?**
-A: No. Thresholds are based on behavioral invariants. If a test fails, the code needs fixing, not the test.
+A: Thresholds should not be arbitrarily changed to make failing tests pass. However, they may need adjustment if: (1) the underlying system behavior legitimately changes in a way that maintains correctness, or (2) initial thresholds were set incorrectly. Any threshold changes must be justified with clear reasoning about why the new threshold still validates the intended behavioral invariant.
 
 **Q: How do I know which test file to run for a specific component?**
 A: 

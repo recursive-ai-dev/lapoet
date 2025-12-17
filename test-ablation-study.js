@@ -13,7 +13,10 @@ console.log('='.repeat(80));
 
 console.log('\n[Purpose]');
 console.log('This framework validates that each AG-TUNE component is causal.');
-console.log('If disabling a module does NOT visibly degrade output, it is ornamental.\n');
+console.log('If disabling a module does NOT visibly degrade output, it is ornamental.');
+console.log('\nNOTE: This test demonstrates the ablation methodology and expected results.');
+console.log('For production validation, implement actual component disabling and measure');
+console.log('real degradation metrics from generated poetry outputs.\n');
 
 // ============================================================================
 // ABLATION TEST FRAMEWORK
@@ -344,8 +347,12 @@ console.log(`  ✓ CYK enforces grammatical correctness\n`);
 // ============================================================================
 // ABLATION SIMULATION
 // ============================================================================
+// NOTE: These are illustrative examples showing expected degradation patterns.
+// In production, these would be replaced with actual measurements from running
+// the full AG-TUNE system with each component disabled.
 
 console.log('[Ablation Simulation Results]\n');
+console.log('(Illustrative examples - replace with actual measurements in production)\n');
 
 console.log('Scenario 1: Full System (All Components Active)');
 console.log('  • FFT: Meter score = 0.85 (strong iambic)');

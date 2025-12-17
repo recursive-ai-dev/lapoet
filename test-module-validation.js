@@ -6,7 +6,6 @@
 // MODULE-LEVEL VALIDATION TESTS FOR AG-TUNE
 // Validates behavioral invariants of each component
 
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -84,6 +83,10 @@ class KernelPCA {
         v = newV;
         
         const norm = Math.sqrt(v.reduce((sum, vi) => sum + vi * vi, 0));
+        if (norm < 1e-10) {
+          // Vector collapsed to zero, break early
+          break;
+        }
         v = v.map(vi => vi / norm);
       }
       
@@ -405,9 +408,15 @@ runTest('Trajectory smoothness: Consecutive emotional distance < random shuffle'
   consecutiveDistance /= (emotionalVectors.length - 1);
   
   // Calculate random shuffle distances (average of 10 shuffles)
+  // Using Fisher-Yates shuffle for proper randomization
   let randomDistance = 0;
   for (let trial = 0; trial < 10; trial++) {
-    const shuffled = [...emotionalVectors].sort(() => Math.random() - 0.5);
+    const shuffled = [...emotionalVectors];
+    // Fisher-Yates shuffle
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
     for (let i = 1; i < shuffled.length; i++) {
       randomDistance += euclideanDistance(shuffled[i-1], shuffled[i]);
     }
@@ -692,8 +701,10 @@ runTest('Learning curve monotonicity: Value variance stabilizes over training', 
   
   console.log(`  Early variance: ${earlyVariance.toFixed(4)}`);
   console.log(`  Late variance: ${lateVariance.toFixed(4)}`);
+  console.log(`  Reduction ratio: ${(earlyVariance / (lateVariance + 1e-10)).toFixed(1)}x`);
   
-  return lateVariance < earlyVariance;
+  // Verify significant variance reduction (at least 100x for ~99% reduction)
+  return lateVariance < earlyVariance && (earlyVariance / (lateVariance + 1e-10)) > 100;
 });
 
 // Test: Reward Ablation
@@ -724,8 +735,10 @@ runTest('Reward ablation: Removing rewards prevents learning', () => {
   
   console.log(`  Weight change with rewards: ${change1.toFixed(4)}`);
   console.log(`  Weight change without rewards: ${change2.toFixed(4)}`);
+  console.log(`  Ratio: ${(change1 / (change2 + 1e-10)).toFixed(1)}x`);
   
-  return change1 > change2 * 2; // With rewards should change more
+  // With rewards should change significantly more (at least 100x for strong ablation effect)
+  return change1 > change2 * 100;
 });
 
 // Test: Eligibility Trace Decay
