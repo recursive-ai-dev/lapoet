@@ -2,6 +2,9 @@ node_modules/
 screenshot.png
 LAUNCH_VERIFICATION.md
 
+# Coverage reports
+coverage/
+
 # Training checkpoints (generated files)
 agtune-lyrics-checkpoint.json
 temp-checkpoint-*.json
