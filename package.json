@@ -18,7 +18,8 @@
     "test-ablation": "node test-ablation-study.js",
     "test-interpretability": "node test-interpretability.js",
     "test-validation-framework": "node test-validation-framework.js",
-    "test-all": "npm run test-engine && npm run test-modules && npm run test-ablation && npm run test-interpretability && npm run test-validation-framework"
+    "test-all": "npm run test-engine && npm run test-modules && npm run test-ablation && npm run test-interpretability && npm run test-validation-framework",
+    "test-coverage": "c8 npm run test-all"
   },
   "dependencies": {
     "react": "^18.2.0",
@@ -26,6 +27,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
+    "c8": "^10.1.2",
     "vite": "^7.2.6"
   }
 }
