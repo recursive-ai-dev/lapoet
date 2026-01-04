@@ -17,6 +17,7 @@
 
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { UniversalLinguisticEngine } from './UniversalLinguisticEngine';
 
 // ============================================================================
 // CORE ALGORITHM IMPLEMENTATIONS
@@ -481,7 +482,8 @@ class AGTuneEngine {
     this.valueEstimator = new TDValueEstimator(24, 0.01, 0.95, 0.8);
     this.rng = new LaggedFibonacciGenerator();
     this.rete = new ReteEngine();
-    this.parser = new CYKParser(this._getGrammar());
+    this.ule = new UniversalLinguisticEngine(); // Integration of Production-Grade Logic
+    this.parser = new CYKParser(this.ule.getGrammar());
     this.vocabulary = new Set();
     this.embeddings = new Map();
     this.emotionalSpace = new Map();
@@ -492,33 +494,18 @@ class AGTuneEngine {
   }
 
   /**
-   * Define grammatical rules for syntactic validation
-   */
-  _getGrammar() {
-    return {
-      'S': [['NP', 'VP'], ['VP'], ['S', 'PP']],
-      'NP': [['Det', 'N'], ['N'], ['Adj', 'N'], ['NP', 'PP']],
-      'VP': [['V', 'NP'], ['V'], ['Adv', 'VP'], ['VP', 'PP']],
-      'PP': [['P', 'NP']],
-      'Det': ['the', 'a', 'an', 'this', 'that', 'my', 'thy'],
-      'Adj': ['bright', 'dark', 'sweet', 'cold', 'warm', 'soft', 'hard', 'gentle', 'fierce'],
-      'N': ['heart', 'soul', 'love', 'death', 'life', 'night', 'day', 'sun', 'moon', 'star', 'sea', 'sky', 'wind', 'fire', 'light', 'shadow'],
-      'V': ['beats', 'breaks', 'shines', 'falls', 'rises', 'calls', 'dies', 'lives', 'loves', 'hates', 'waits', 'seeks', 'finds', 'loses', 'gives', 'takes'],
-      'Adv': ['softly', 'gently', 'swiftly', 'slowly', 'deeply', 'bright', 'dark'],
-      'P': ['in', 'on', 'at', 'with', 'without', 'against', 'beneath', 'above', 'through', 'beyond']
-    };
-  }
-
-  /**
    * Initialize Rete constraint checking rules
    */
   _initializeReteRules() {
-    // Rhyme scheme constraint
+    // Rhyme scheme constraint: NOW USES DYNAMIC PHONETICS
     this.rete.addRule('rhymeCheck', [
       { key: 'lastWord', test: (w) => typeof w === 'string' && w.length > 0 },
-      { key: 'rhymeScheme', test: (s) => ['A', 'B'].includes(s) }
+      { key: 'rhymeTarget', test: (t) => typeof t === 'string' }
     ], (facts) => {
-      return facts.rhymeScheme === this._getRhymeGroup(facts.lastWord);
+      if (!facts.rhymeTarget) return true;
+      const w1 = this.ule.analyze(facts.lastWord);
+      const w2 = this.ule.analyze(facts.rhymeTarget);
+      return w1.rhymePart === w2.rhymePart;
     });
 
     // Syllable count constraint (8-10 for iambic pentameter)
@@ -532,21 +519,6 @@ class AGTuneEngine {
       { key: 'lastWord', test: (w) => w !== undefined },
       { key: 'history', test: (h) => h.length < 3 || h.slice(-3).slice(0, -1).every(word => word !== h.slice(-1)[0]) }
     ], () => true);
-  }
-
-  /**
-   * Map word to rhyme group
-   */
-  _getRhymeGroup(word) {
-    const rhymes = {
-      'A': ['day', 'way', 'say', 'stay', 'pray', 'grey', 'may', 'play'],
-      'B': ['night', 'light', 'bright', 'sight', 'fight', 'flight', 'height', 'right']
-    };
-    
-    for (const [group, words] of Object.entries(rhymes)) {
-      if (words.includes(word.toLowerCase())) return group;
-    }
-    return null;
   }
 
   /**
@@ -590,10 +562,10 @@ class AGTuneEngine {
   }
 
   /**
-   * Heuristic syllable counting (vowel groups)
+   * Advanced syllable counting via ULE
    */
   _countSyllables(word) {
-    return word.toLowerCase().match(/[aeiouy]{1,3}/g)?.length || 1;
+    return this.ule.analyze(word).syllables;
   }
 
   /**
@@ -907,7 +879,7 @@ class AGTuneEngine {
   /**
    * Generate single line of poetry using A*-guided beam search
    */
-  generateLine(prompt, targetSyllables = 10, beamWidth = 5, maxIter = 50) {
+  generateLine(prompt, targetSyllables = 10, beamWidth = 5, rhymeTarget = null, maxIter = 50) {
     if (!this.isTrained) throw new Error('Model must be trained before generation');
     
     const context = this._tokenize(prompt);
@@ -933,7 +905,15 @@ class AGTuneEngine {
         
         // H(n): heuristic cost (multi-objective)
         const meterScore = FFTMeterAnalyzer.analyzeStressPattern(this._getStressPattern(newLine));
-        const rhymeScore = this._getRhymeGroup(word) ? 1 : 0.5;
+
+        // Use logic-based rhyming preference if we are near the end of the line
+        const analysis = this.ule.analyze(word);
+        let rhymeBonus = 0;
+        if (rhymeTarget && newSyllableCount >= targetSyllables - 2) {
+             const targetAnalysis = this.ule.analyze(rhymeTarget);
+             if (analysis.rhymePart === targetAnalysis.rhymePart) rhymeBonus = 2.0;
+        }
+
         const cycle = FloydCycleDetector.detect(newContext);
         const cyclePenalty = cycle.detected ? cycle.length * 2 : 0;
         
@@ -943,7 +923,7 @@ class AGTuneEngine {
         // Multi-objective: β1*Structure + β2*Theme + β3*V(S)
         const β1 = 0.3, β2 = 0.3, β3 = 0.4;
         const H = β1 * (1 - meterScore + cyclePenalty) + 
-                  β2 * (1 - rhymeScore) + 
+                  β2 * (1 - rhymeBonus) +
                   β3 * Math.max(0, 2 - aestheticValue);
         
         const totalScore = g + H;
@@ -965,7 +945,7 @@ class AGTuneEngine {
       // Rete constraint verification
       const facts = {
         lastWord: chosen.word,
-        rhymeScheme: this._getRhymeGroup(chosen.word),
+        rhymeTarget: (syllableCount >= targetSyllables - 2) ? rhymeTarget : null, // Only enforce at end of line
         syllableCount,
         history: context
       };
@@ -994,13 +974,24 @@ class AGTuneEngine {
     const allTokens = this._tokenize(prompt);
     const states = [];
     const rewards = [];
+    let previousEndWord = null;
 
     for (let i = 0; i < lines; i++) {
+      // Simple AABB or ABAB logic could be implemented here.
+      // For now, let's try to make every even line rhyme with the previous one (AABB style approximation)
+      const rhymeTarget = (i % 2 === 1) ? previousEndWord : null;
+
       const lineObj = this.generateLine(
         poem.join(' ') + ' ' + prompt,
         10, // Iambic pentameter ~10 syllables
-        beamWidth
+        beamWidth,
+        rhymeTarget
       );
+
+      const lineTokens = this._tokenize(lineObj.line);
+      if (lineTokens.length > 0) {
+          previousEndWord = lineTokens[lineTokens.length - 1];
+      }
 
       poem.push(lineObj.line);
       allTokens.push(...this._tokenize(lineObj.line));
