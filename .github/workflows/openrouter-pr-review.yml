@@ -23,7 +23,7 @@ jobs:
       - name: Fetch PR diff
         id: diff
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.ACCESS_TOKEN }}
         run: |
           set -euo pipefail
           DIFF_URL="${{ github.event.pull_request.url }}"
