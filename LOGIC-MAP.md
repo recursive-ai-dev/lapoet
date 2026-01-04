@@ -51,3 +51,23 @@ This document maps the production workflow implementation for the OpenRouter PR 
 ## Mathematical Rigor Notes
 - **Bounded Prompt Size:** The prompt size is bounded by the max diff size plus constant prompt size. If `P` is prompt length, then `P <= MAX + C` where `C` is the fixed prompt overhead and metadata. This ensures that prompt length does not exceed controllable limits.
 - **Deterministic Verdict Parsing:** The regex is deterministic; it accepts exactly three tokens. This prevents label churn from ambiguous outputs, maintaining triage stability.
+# Logic Map
+
+## Overview
+This document explains the logic chain for updating `UPDATES_STRATEGY.md` with standardized list formatting while preserving the intent of each section.
+
+## Logic Chain (Steps 1–3)
+1. **Identify the target scope**
+   - The requested change focuses on list markers within `UPDATES_STRATEGY.md`.
+   - Objective: normalize bullet spacing while preserving content meaning.
+2. **Preserve semantic content**
+   - Keep each section title and bullet text intact.
+   - Ensure the meaning of each "Current State," "Upgrade," and "Benefit" statement remains unchanged.
+3. **Apply precise formatting corrections**
+   - Replace indented bullet markers (`*   `) with a consistent bullet marker (`* `).
+   - Confirm that headings remain unchanged and list order is preserved.
+
+## Verification Notes
+- The change is localized to list marker spacing.
+- No text content is altered beyond whitespace normalization.
+- Section order and labels are preserved for traceability.
