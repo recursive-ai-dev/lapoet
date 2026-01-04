@@ -1,0 +1,212 @@
+name: OpenRouter PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  pull-requests: write
+  contents: read
+  issues: write
+
+jobs:
+  ai_review:
+    if: ${{ github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch PR diff
+        id: diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          DIFF_URL="${{ github.event.pull_request.url }}"
+          curl -sS -L \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github.v3.diff" \
+            "$DIFF_URL" > pr.diff
+
+          MAX=150000
+          SIZE=$(wc -c < pr.diff)
+          TRUNCATED=false
+          if [ "$SIZE" -gt "$MAX" ]; then
+            head -c "$MAX" pr.diff > pr.diff.trimmed
+            mv pr.diff.trimmed pr.diff
+            TRUNCATED=true
+            echo "Diff trimmed to ${MAX} bytes."
+          fi
+
+          echo "path=pr.diff" >> "$GITHUB_OUTPUT"
+          echo "truncated=$TRUNCATED" >> "$GITHUB_OUTPUT"
+
+      - name: AI Review via OpenRouter
+        id: ai
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          DIFF_TRUNCATED: ${{ steps.diff.outputs.truncated }}
+        run: |
+          set -euo pipefail
+
+          RAW_MODEL="${OPENROUTER_MODEL:-openai/gpt-4o-mini:free}"
+          if [[ "$RAW_MODEL" != *":free" ]]; then
+            echo "❌ Model must be a :free model. Got: $RAW_MODEL"
+            exit 1
+          fi
+          MODEL="$RAW_MODEL"
+
+          cat > prompt.txt << 'EOF'
+          You are a senior engineer doing a PR review.
+          Be direct, specific, and helpful.
+          Output in Markdown.
+
+          Include sections:
+          1) Summary (1-3 bullets)
+          2) High-risk issues (bugs, security, perf) - must be actionable
+          3) Suggestions (readability, architecture)
+          4) Missing tests / quick test ideas
+          5) "Approve?" (one of: APPROVE / REQUEST_CHANGES / COMMENT_ONLY) with 1 sentence justification
+
+          Constraints:
+          - If diff is truncated, mention that.
+          - Do not invent files or functions not shown.
+          EOF
+
+          jq -n \
+            --arg model "$MODEL" \
+            --arg title "$PR_TITLE" \
+            --arg body "${PR_BODY:-}" \
+            --arg author "$PR_AUTHOR" \
+            --arg truncated "$DIFF_TRUNCATED" \
+            --rawfile diff "${{ steps.diff.outputs.path }}" \
+            --rawfile sys prompt.txt \
+            '{
+              model: $model,
+              temperature: 0.2,
+              max_tokens: 900,
+              messages: [
+                {role:"system", content:$sys},
+                {role:"user", content: ("PR Title: " + $title + "\nPR Author: " + $author + "\nPR Description:\n" + $body + "\n\nDiff truncated: " + $truncated + "\n\n---\nDIFF:\n" + $diff)}
+              ]
+            }' > req.json
+
+          curl -sS https://openrouter.ai/api/v1/chat/completions \
+            -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -H "HTTP-Referer: https://github.com/${REPO}" \
+            -H "X-Title: Free-Only PR Review Bot" \
+            --data @req.json \
+            > resp.json
+
+          CONTENT=$(jq -r '.choices[0].message.content // empty' resp.json)
+
+          if [ -z "$CONTENT" ] || [ "$CONTENT" = "null" ]; then
+            echo "OpenRouter response was empty. Full response:"
+            cat resp.json
+            exit 1
+          fi
+
+          printf "%s" "$CONTENT" > review.md
+          echo "review_path=review.md" >> "$GITHUB_OUTPUT"
+
+      - name: Auto-label based on verdict
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const review = fs.readFileSync('review.md', 'utf8');
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const verdict = (review.match(/Approve\?\s*\**\s*(APPROVE|REQUEST_CHANGES|COMMENT_ONLY)/i) || [])[1]?.toUpperCase();
+
+            const labelsToAdd = [];
+            const labelsToRemove = [];
+            const labelDefinitions = {
+              'ai:request-changes': { color: 'd73a4a', description: 'AI review requests changes' },
+              'ai:approve': { color: '0e8a16', description: 'AI review approves' },
+              'ai:comment-only': { color: '5319e7', description: 'AI review is comment-only' }
+            };
+
+            if (verdict === 'REQUEST_CHANGES') {
+              labelsToAdd.push('ai:request-changes');
+              labelsToRemove.push('ai:approve');
+            } else if (verdict === 'APPROVE') {
+              labelsToAdd.push('ai:approve');
+              labelsToRemove.push('ai:request-changes');
+            } else if (verdict === 'COMMENT_ONLY') {
+              labelsToAdd.push('ai:comment-only');
+            }
+
+            if (!labelsToAdd.length && !labelsToRemove.length) {
+              core.info('No verdict detected; skipping labels.');
+              return;
+            }
+
+            const existingLabels = await github.paginate(github.rest.issues.listLabelsForRepo, {
+              owner,
+              repo,
+              per_page: 100
+            });
+            const existingNames = new Set(existingLabels.map(label => label.name));
+
+            for (const name of labelsToAdd) {
+              if (!existingNames.has(name)) {
+                const { color, description } = labelDefinitions[name];
+                await github.rest.issues.createLabel({ owner, repo, name, color, description });
+              }
+            }
+
+            if (labelsToRemove.length) {
+              for (const name of labelsToRemove) {
+                if (!existingNames.has(name)) {
+                  continue;
+                }
+                try {
+                  await github.rest.issues.removeLabel({ owner, repo, issue_number, name });
+                } catch (error) {
+                  core.info(`Label ${name} was not present on the PR.`);
+                }
+              }
+            }
+
+            if (labelsToAdd.length) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: labelsToAdd });
+            }
+
+      - name: Post PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('${{ steps.ai.outputs.review_path }}', 'utf8');
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const marker = '<!-- openrouter-pr-review -->';
+            const finalBody = `${marker}\n## 🤖 OpenRouter PR Review\n\n${body}\n\n_${new Date().toISOString()}_`;
+
+            const comments = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
+            const existing = comments.data.find(c =>
+              c.user?.type === 'Bot' &&
+              typeof c.body === 'string' &&
+              c.body.includes(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: finalBody });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body: finalBody });
+            }
