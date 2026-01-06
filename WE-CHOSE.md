@@ -77,3 +77,24 @@ Document the three-perspective planning approach for the formatting adjustment i
 - **End Customer:** Higher phonetic and grammatical coherence improves usability.
 
 **Mapped logic chain reference:** LOGIC-MAP.md (Steps 1–3, Linguistic Engine & Corpus Loading).
+
+# Perspective Selection: Deterministic Seeding & RNG Propagation
+
+### CEO Perspective
+- **Goal:** Provide repeatable outcomes for demos, testing, and stakeholder review.
+- **Choice:** Single seeded RNG enables consistent outputs when `?seed=` is supplied.
+
+### Junior Developer Perspective
+- **Goal:** Make randomness easy to reason about and debug.
+- **Choice:** Central RNG injection removes hidden `Math.random()` usage and simplifies tracing.
+
+### End Customer Perspective
+- **Goal:** Allow users to reproduce poems or training runs reliably.
+- **Choice:** Seed parsing accepts numeric and string values without requiring new UI controls.
+
+### Combined Choice Justification
+- **CEO:** Repeatable results reduce demo risk and simplify acceptance validation.
+- **Junior Dev:** Shared RNG path avoids fragmented randomness sources.
+- **End Customer:** Reproducible outputs improve trust and usability.
+
+**Mapped logic chain reference:** LOGIC-MAP.md (Steps 1–3, Deterministic Seeding & RNG Propagation).

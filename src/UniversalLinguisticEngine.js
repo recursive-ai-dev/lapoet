@@ -8,9 +8,10 @@
  * Replaces static lookup tables with algorithmic reasoning.
  */
 export class UniversalLinguisticEngine {
-  constructor() {
+  constructor({ rng } = {}) {
+    this.rng = rng;
     this.phonetics = new PhoneticEngine();
-    this.grammar = new ConstraintGrammar();
+    this.grammar = new ConstraintGrammar(rng);
   }
 
   /**
@@ -303,8 +304,19 @@ class PhoneticEngine {
  * Supports agreement (Number, Person, Tense) and recursive generation.
  */
 class ConstraintGrammar {
-  constructor() {
+  constructor(rng) {
+    this.rng = rng;
     this.lexicon = this._buildProductionLexicon();
+  }
+
+  _random() {
+    if (this.rng && typeof this.rng.next === 'function') {
+      return this.rng.next();
+    }
+    if (typeof this.rng === 'function') {
+      return this.rng();
+    }
+    return Math.random();
   }
 
   _buildProductionLexicon() {
@@ -425,11 +437,11 @@ class ConstraintGrammar {
       if (candidates.length === 0) {
         // Fallback: relax constraints if too strict (simple error recovery)
         if (this.lexicon[symbol].length > 0) {
-             return this.lexicon[symbol][Math.floor(Math.random() * this.lexicon[symbol].length)];
+             return this.lexicon[symbol][Math.floor(this._random() * this.lexicon[symbol].length)];
         }
         return null;
       }
-      return candidates[Math.floor(Math.random() * candidates.length)];
+      return candidates[Math.floor(this._random() * candidates.length)];
   }
 
   /**
@@ -447,18 +459,18 @@ class ConstraintGrammar {
       case 'S':
         // S -> NP VP
         // We decide on a 'number' feature for the subject, which propagates to VP
-        const num = Math.random() > 0.5 ? 'sg' : 'pl';
+        const num = this._random() > 0.5 ? 'sg' : 'pl';
         return `${this.generate('NP', { num })} ${this.generate('VP', { num })}`;
 
       case 'NP': {
         // NP -> Det N | Det Adj N | N (plural/abstract) | Det Adj Adj N
-        const r = Math.random();
+        const r = this._random();
 
         // If constraint is not provided, we should decide on one internally so Det and N agree.
         // If external constraints exists (from S), we use them.
         let localConstraints = { ...constraints };
         if (!localConstraints.num) {
-            localConstraints.num = Math.random() > 0.5 ? 'sg' : 'pl';
+            localConstraints.num = this._random() > 0.5 ? 'sg' : 'pl';
         }
 
         if (r < 0.35) {
@@ -493,13 +505,13 @@ class ConstraintGrammar {
 
         // Optional Adverb prefix
         let prefix = "";
-        if (Math.random() < 0.25) {
+        if (this._random() < 0.25) {
             prefix = this.generate('Adv') + " ";
         }
 
         if (trans === 'intrans') {
             // Intransitive: V or V PP
-            if (Math.random() < 0.4) {
+            if (this._random() < 0.4) {
                  return `${prefix}${verb} ${this.generate('PP')}`;
             }
             return `${prefix}${verb}`;
@@ -508,7 +520,7 @@ class ConstraintGrammar {
             // Note: Object NP doesn't need to agree with Subject (constraints), so we pass empty constraints
             // or specific ones (like Accusative case if we had cases)
             // Passing empty constraints allows NP to pick its own number agreement
-             if (Math.random() < 0.2) {
+             if (this._random() < 0.2) {
                  return `${prefix}${verb} ${this.generate('NP')} ${this.generate('PP')}`;
              }
              return `${prefix}${verb} ${this.generate('NP')}`;
@@ -562,10 +574,10 @@ class ConstraintGrammar {
     });
 
     if (candidates.length > 0) {
-      return candidates[Math.floor(Math.random() * candidates.length)];
+      return candidates[Math.floor(this._random() * candidates.length)];
     }
     if (entries.length > 0) {
-      return entries[Math.floor(Math.random() * entries.length)];
+      return entries[Math.floor(this._random() * entries.length)];
     }
     return { word: '?' };
   }

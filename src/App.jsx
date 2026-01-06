@@ -23,17 +23,39 @@ import { UniversalLinguisticEngine } from './UniversalLinguisticEngine';
 // CORE ALGORITHM IMPLEMENTATIONS
 // ============================================================================
 
+const hashSeedString = (value) => {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+};
+
+const resolveSeedFromLocation = () => {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  const seedParam = params.get('seed');
+  if (seedParam === null) return null;
+  const normalized = seedParam.trim();
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  if (Number.isFinite(parsed)) return Math.floor(parsed);
+  return hashSeedString(normalized);
+};
+
 /**
  * Kernel PCA for Non-linear Theme Embedding
  * Transforms word embeddings into emotional/thematic space using polynomial kernel
  */
 class KernelPCA {
-  constructor(nComponents = 12, degree = 3) {
+  constructor(nComponents = 12, degree = 3, rng = Math.random) {
     this.nComponents = nComponents;
     this.degree = degree;
     this.eigenvectors = null;
     this.eigenvalues = null;
     this.X_fit = null;
+    this.rng = rng;
   }
 
   /**
@@ -90,8 +112,8 @@ class KernelPCA {
     
     for (let k = 0; k < Math.min(this.nComponents, n); k++) {
       // Initialize random vector for PCA eigenvalue decomposition
-      // Math.random() is acceptable here: used for ML initialization, not cryptographic purposes
-      let v = Array(n).fill().map(() => Math.random() - 0.5);
+      // Non-cryptographic RNG allows deterministic seeding when provided.
+      let v = Array(n).fill().map(() => this.rng() - 0.5);
       
       // Gram-Schmidt orthogonalization against previous eigenvectors
       for (let i = 0; i < eigenvectors.length; i++) {
@@ -178,9 +200,9 @@ class KernelPCA {
  * Estimates aesthetic value of poetic states for reinforcement learning
  */
 class TDValueEstimator {
-  constructor(nFeatures = 24, alpha = 0.01, gamma = 0.95, lambda = 0.8) {
-    // Math.random() is acceptable here: used for neural network weight initialization, not cryptographic purposes
-    this.weights = Array(nFeatures).fill(0).map(() => Math.random() * 0.01);
+  constructor(nFeatures = 24, alpha = 0.01, gamma = 0.95, lambda = 0.8, rng = Math.random) {
+    // Non-cryptographic RNG allows deterministic seeding when provided.
+    this.weights = Array(nFeatures).fill(0).map(() => rng() * 0.01);
     this.alpha = alpha;
     this.gamma = gamma;
     this.lambda = lambda;
@@ -477,12 +499,13 @@ class FFTMeterAnalyzer {
  * Orchestrates all algorithms for multi-objective poetry generation
  */
 class AGTuneEngine {
-  constructor() {
-    this.kpca = new KernelPCA(12, 3);
-    this.valueEstimator = new TDValueEstimator(24, 0.01, 0.95, 0.8);
-    this.rng = new LaggedFibonacciGenerator();
+  constructor(seed = Date.now()) {
+    this.rng = new LaggedFibonacciGenerator(seed);
+    const rng = () => this.rng.next();
+    this.kpca = new KernelPCA(12, 3, rng);
+    this.valueEstimator = new TDValueEstimator(24, 0.01, 0.95, 0.8, rng);
     this.rete = new ReteEngine();
-    this.ule = new UniversalLinguisticEngine(); // Integration of Production-Grade Logic
+    this.ule = new UniversalLinguisticEngine({ rng: this.rng }); // Integration of Production-Grade Logic
     this.parser = new CYKParser(this.ule.getGrammar());
     this.vocabulary = new Set();
     this.embeddings = new Map();
@@ -737,7 +760,11 @@ class AGTuneEngine {
     }
 
     // Restore KPCA (defensively sanitize numeric content)
-    this.kpca = new KernelPCA(data.kpca?.nComponents || 8, data.kpca?.degree || 3);
+    this.kpca = new KernelPCA(
+      data.kpca?.nComponents || 8,
+      data.kpca?.degree || 3,
+      () => this.rng.next()
+    );
     this.kpca.eigenvectors = this._asNumberMatrix(data.kpca?.eigenvectors);
     this.kpca.eigenvalues = this._asNumberArray(data.kpca?.eigenvalues);
     this.kpca.X_fit = this._asNumberMatrix(data.kpca?.X_fit);
@@ -747,7 +774,8 @@ class AGTuneEngine {
       data.valueEstimator?.weights?.length || 16,
       data.valueEstimator?.alpha ?? 0.01,
       data.valueEstimator?.gamma ?? 0.95,
-      data.valueEstimator?.lambda ?? 0.8
+      data.valueEstimator?.lambda ?? 0.8,
+      () => this.rng.next()
     );
     this.valueEstimator.weights = this._asNumberArray(
       data.valueEstimator?.weights,
@@ -859,8 +887,8 @@ class AGTuneEngine {
     
     const scored = candidates.map(word => {
       const eSpace = this.emotionalSpace.get(word);
-      // Math.random() is acceptable here: used for fallback scoring in ML algorithm, not cryptographic purposes
-      if (!eSpace) return { word, score: Math.random() };
+      // Non-cryptographic RNG allows deterministic seeding when provided.
+      if (!eSpace) return { word, score: this.rng.next() };
       
       const dist = Math.sqrt(eSpace.reduce((sum, v, i) => {
         const diff = v - (lastESpace[i] || 0);
@@ -1029,7 +1057,10 @@ class AGTuneEngine {
  * Interactive interface for training and poetry generation
  */
 export default function AGTunePoet() {
-  const [engine] = useState(() => new AGTuneEngine());
+  const [engine] = useState(() => {
+    const seed = resolveSeedFromLocation();
+    return new AGTuneEngine(Number.isFinite(seed) ? seed : Date.now());
+  });
   const [corpus, setCorpus] = useState([]);
   const [trainingState, setTrainingState] = useState({
     isTraining: false,
