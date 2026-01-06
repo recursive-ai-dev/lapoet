@@ -71,3 +71,16 @@ This document explains the logic chain for updating `UPDATES_STRATEGY.md` with s
 - The change is localized to list marker spacing.
 - No text content is altered beyond whitespace normalization.
 - Section order and labels are preserved for traceability.
+
+## Logic Chain: Linguistic Engine & Corpus Loading (Steps 1–3)
+1. **Identify production-grade gaps**
+   - **Why:** The phoneme pipeline contained placeholder comments, verb transitivity was mocked, and adverbs were injected as mock data.
+   - **Invariant:** Every generation and parsing path must be driven by deterministic, data-backed logic rather than stub comments.
+2. **Replace placeholders with deterministic linguistic mechanics**
+   - **Why:** Grapheme segmentation, silent-e handling, and digraph recognition prevent re-processing errors and improve syllable/stress accuracy.
+   - **Invariant:** Each grapheme token is processed exactly once in left-to-right order, ensuring no conflicting substitutions.
+   - **Proof Sketch:** The tokenizer advances index `i` by 2 on digraph/vowel-team hits and by 1 otherwise. Therefore, each character participates in at most one token, yielding a total order without overlaps.
+3. **Enforce grammatical constraints and corpus sourcing**
+   - **Why:** Verb transitivity must guide whether direct objects appear; adverbs must originate from the lexicon; lyric corpus should load real files when available.
+   - **Invariant:** Transitive verbs prefer `V NP`, intransitives avoid object insertion; adverbs are derived from `lexicon.Adv`; corpus loading resolves `/lyrics/*.txt` entries before falling back to embedded lines.
+   - **Proof Sketch:** The VP generator branches on `feats.trans` with explicit paths, and `import.meta.glob` enumerates real assets, ensuring coverage without mock fillers.

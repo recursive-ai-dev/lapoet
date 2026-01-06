@@ -1104,10 +1104,28 @@ export default function AGTunePoet() {
   // The lyrics are pre-trained in the checkpoint file (agtune-lyrics-checkpoint.json)
   // which can be loaded using the "Load Checkpoint" button
   const loadLyricsCorpus = useCallback(async () => {
-    // TODO: For server-side rendering, implement actual file system access
-    // For client-side, users should upload lyrics files or load pre-trained checkpoint
-    console.log('Lyrics corpus is embedded in checkpoint file. Use "Load Checkpoint" to load pre-trained model.');
-    return embeddedCorpus;
+    const lyricModules = import.meta.glob('/lyrics/*.txt', { as: 'raw' });
+    const entries = Object.entries(lyricModules);
+    if (entries.length === 0) {
+      console.warn('No lyric files detected in /lyrics. Use "Load Checkpoint" or file upload to expand the corpus.');
+      return [...embeddedCorpus];
+    }
+
+    const loaded = await Promise.all(entries.map(async ([path, loader]) => {
+      try {
+        const content = await loader();
+        return { path, content };
+      } catch (error) {
+        console.warn(`Failed to load lyrics from ${path}`, error);
+        return { path, content: '' };
+      }
+    }));
+
+    const lines = loaded.flatMap(({ content }) => content.split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0));
+    const combined = [...embeddedCorpus, ...lines];
+    return Array.from(new Set(combined));
   }, []);
 
   const loadCorpus = useCallback(() => {

@@ -105,14 +105,37 @@ class PhoneticEngine {
       // Actually, my silent E rule was: $1:$2. I need to handle the conversion of $1 to long vowel.
       // Let's rely on post-processing for that or just map long vowels directly.
     ];
-
-    // Long vowel mapping for silent E logic
-    this.longVowelMap = {
-        '@': 'A', // a -> A
-        'E': 'I', // e -> I (rare)
-        'i': 'Y', // i -> Y (bite)
-        'o': 'O', // o -> O (hope)
-        'u': 'U'  // u -> U (cute)
+    this.vowelTeams = new Map([
+      ['ee', 'I'],
+      ['ea', 'I'],
+      ['oo', 'U'],
+      ['ou', 'W'],
+      ['ai', 'A'],
+      ['ay', 'A'],
+      ['oa', 'O'],
+      ['ie', 'Y'],
+      ['ei', 'A']
+    ]);
+    this.consonantDigraphs = new Map([
+      ['sh', 'S'],
+      ['ch', 'C'],
+      ['th', 'T'],
+      ['ph', 'F'],
+      ['ck', 'k']
+    ]);
+    this.longVowels = {
+      a: 'A',
+      e: 'E',
+      i: 'I',
+      o: 'O',
+      u: 'U'
+    };
+    this.shortVowels = {
+      a: '@',
+      e: 'E',
+      i: 'i',
+      o: 'o',
+      u: 'u'
     };
   }
 
@@ -170,6 +193,53 @@ class PhoneticEngine {
     });
 
     return phonemizedParts.join('');
+  }
+
+  _phonemizePart(part) {
+    if (!part) return '';
+    let working = part;
+    if (working.length >= 3) {
+      const last = working[working.length - 1];
+      const consonant = working[working.length - 2];
+      const vowel = working[working.length - 3];
+      if (last === 'e' && this._isVowel(vowel) && !this._isVowel(consonant)) {
+        const head = working.slice(0, -3);
+        const longVowel = this.longVowels[vowel] ?? vowel;
+        working = `${head}${longVowel}${consonant}`;
+      }
+    }
+
+    let phonemes = '';
+    for (let i = 0; i < working.length; i += 1) {
+      const twoChar = working.slice(i, i + 2);
+      if (this.vowelTeams.has(twoChar)) {
+        phonemes += this.vowelTeams.get(twoChar);
+        i += 1;
+        continue;
+      }
+      if (this.consonantDigraphs.has(twoChar)) {
+        phonemes += this.consonantDigraphs.get(twoChar);
+        i += 1;
+        continue;
+      }
+
+      const ch = working[i];
+      if (this.shortVowels[ch]) {
+        phonemes += this.shortVowels[ch];
+        continue;
+      }
+      if (ch === 'y') {
+        phonemes += i === working.length - 1 ? 'Y' : 'y';
+        continue;
+      }
+      phonemes += ch;
+    }
+
+    return phonemes;
+  }
+
+  _isVowel(char) {
+    return Boolean(this.shortVowels[char]);
   }
 
   countSyllablesFromPhonemes(phonemes) {
@@ -320,6 +390,14 @@ class ConstraintGrammar {
         { word: 'those', feats: { num: 'pl' } },
         { word: 'some', feats: {} },
         { word: 'no', feats: {} }
+      ],
+      Adv: [
+        { word: 'softly', feats: { manner: 'gentle' } },
+        { word: 'gently', feats: { manner: 'gentle' } },
+        { word: 'boldly', feats: { manner: 'strong' } },
+        { word: 'slowly', feats: { manner: 'slow' } },
+        { word: 'brightly', feats: { manner: 'radiant' } },
+        { word: 'quietly', feats: { manner: 'subtle' } }
       ],
       Prep: [
         { word: 'in' }, { word: 'on' }, { word: 'through' }, { word: 'beyond' },
@@ -472,5 +550,23 @@ class ConstraintGrammar {
     grammar['Adv'] = this.lexicon['Adv'].map(o => o.word);
 
     return grammar;
+  }
+
+  _selectEntry(symbol, constraints = {}) {
+    const entries = this.lexicon[symbol] ?? [];
+    const candidates = entries.filter(entry => {
+      for (const [key, val] of Object.entries(constraints)) {
+        if (entry.feats && entry.feats[key] && entry.feats[key] !== val) return false;
+      }
+      return true;
+    });
+
+    if (candidates.length > 0) {
+      return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+    if (entries.length > 0) {
+      return entries[Math.floor(Math.random() * entries.length)];
+    }
+    return { word: '?' };
   }
 }
