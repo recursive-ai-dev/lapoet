@@ -81,6 +81,38 @@ class PhoneticEngine {
       { regex: /u/g, repl: 'u' },
       { regex: /y$/g, repl: 'Y' }, // fly -> flY
     ];
+    this.vowelTeams = new Map([
+      ['ee', 'I'],
+      ['ea', 'I'],
+      ['oo', 'U'],
+      ['ou', 'W'],
+      ['ai', 'A'],
+      ['ay', 'A'],
+      ['oa', 'O'],
+      ['ie', 'Y'],
+      ['ei', 'A']
+    ]);
+    this.consonantDigraphs = new Map([
+      ['sh', 'S'],
+      ['ch', 'C'],
+      ['th', 'T'],
+      ['ph', 'F'],
+      ['ck', 'k']
+    ]);
+    this.longVowels = {
+      a: 'A',
+      e: 'E',
+      i: 'I',
+      o: 'O',
+      u: 'U'
+    };
+    this.shortVowels = {
+      a: '@',
+      e: 'E',
+      i: 'i',
+      o: 'o',
+      u: 'u'
+    };
   }
 
   /**
@@ -100,19 +132,56 @@ class PhoneticEngine {
 
     const parts = current.split(' ');
 
-    const phonemizedParts = parts.map(part => {
-      let p = part;
-      // Apply rules in order
-      for (const rule of this.rules) {
-        // We use a placeholder system to prevent re-processing
-        // But for this implementation, we'll do a direct transformation pass
-        // This is a simplified sequential application
-        p = p.replace(rule.regex, rule.repl);
-      }
-      return p;
-    });
+    const phonemizedParts = parts.map(part => this._phonemizePart(part));
 
     return phonemizedParts.join('');
+  }
+
+  _phonemizePart(part) {
+    if (!part) return '';
+    let working = part;
+    if (working.length >= 3) {
+      const last = working[working.length - 1];
+      const consonant = working[working.length - 2];
+      const vowel = working[working.length - 3];
+      if (last === 'e' && this._isVowel(vowel) && !this._isVowel(consonant)) {
+        const head = working.slice(0, -3);
+        const longVowel = this.longVowels[vowel] ?? vowel;
+        working = `${head}${longVowel}${consonant}`;
+      }
+    }
+
+    let phonemes = '';
+    for (let i = 0; i < working.length; i += 1) {
+      const twoChar = working.slice(i, i + 2);
+      if (this.vowelTeams.has(twoChar)) {
+        phonemes += this.vowelTeams.get(twoChar);
+        i += 1;
+        continue;
+      }
+      if (this.consonantDigraphs.has(twoChar)) {
+        phonemes += this.consonantDigraphs.get(twoChar);
+        i += 1;
+        continue;
+      }
+
+      const ch = working[i];
+      if (this.shortVowels[ch]) {
+        phonemes += this.shortVowels[ch];
+        continue;
+      }
+      if (ch === 'y') {
+        phonemes += i === working.length - 1 ? 'Y' : 'y';
+        continue;
+      }
+      phonemes += ch;
+    }
+
+    return phonemes;
+  }
+
+  _isVowel(char) {
+    return Boolean(this.shortVowels[char]);
   }
 
   countSyllablesFromPhonemes(phonemes) {
@@ -215,6 +284,14 @@ class ConstraintGrammar {
         { word: 'this', feats: { num: 'sg' } },
         { word: 'those', feats: { num: 'pl' } }
       ],
+      Adv: [
+        { word: 'softly', feats: { manner: 'gentle' } },
+        { word: 'gently', feats: { manner: 'gentle' } },
+        { word: 'boldly', feats: { manner: 'strong' } },
+        { word: 'slowly', feats: { manner: 'slow' } },
+        { word: 'brightly', feats: { manner: 'radiant' } },
+        { word: 'quietly', feats: { manner: 'subtle' } }
+      ],
       Prep: [
         { word: 'in' }, { word: 'on' }, { word: 'through' }, { word: 'beyond' },
         { word: 'beneath' }, { word: 'against' }, { word: 'with' }, { word: 'without' }
@@ -228,20 +305,7 @@ class ConstraintGrammar {
   generate(symbol, constraints = {}) {
     // 1. Base Case: Terminal lookup
     if (this.lexicon[symbol]) {
-      const candidates = this.lexicon[symbol].filter(entry => {
-        // Check constraints (e.g., number agreement)
-        for (const [key, val] of Object.entries(constraints)) {
-          if (entry.feats && entry.feats[key] && entry.feats[key] !== val) return false;
-        }
-        return true;
-      });
-
-      if (candidates.length === 0) {
-        // Fallback: relax constraints if too strict (simple error recovery)
-        // Try to match partial constraints or just pick random
-        return this.lexicon[symbol][Math.floor(Math.random() * this.lexicon[symbol].length)].word;
-      }
-      return candidates[Math.floor(Math.random() * candidates.length)].word;
+      return this._selectEntry(symbol, constraints).word;
     }
 
     // 2. Recursive Steps (Grammar Rules)
@@ -271,12 +335,15 @@ class ConstraintGrammar {
         // VP -> V | V NP | V PP
         // Check verb transitivity in future, for now simplified
         const r2 = Math.random();
-        const v = this.generate('V', constraints);
-        // We need to look up the verb to see if it's transitive (mock lookup for logic)
-        // In a full system, we'd pass the verb object back up.
-        // Here we just append structures blindly but grammatically correct per phrase
-        if (r2 < 0.3) return v;
-        if (r2 < 0.6) return `${v} ${this.generate('NP')}`; // Object doesn't need to agree with Subject
+        const verbEntry = this._selectEntry('V', constraints);
+        const v = verbEntry.word;
+        const trans = verbEntry.feats?.trans;
+        if (trans === 'trans') {
+          if (r2 < 0.2) return v;
+          if (r2 < 0.8) return `${v} ${this.generate('NP')}`; // Object doesn't need to agree with Subject
+          return `${v} ${this.generate('PP')}`;
+        }
+        if (r2 < 0.6) return v;
         return `${v} ${this.generate('PP')}`;
 
       case 'PP':
@@ -308,8 +375,26 @@ class ConstraintGrammar {
     grammar['N'] = this.lexicon['N'].map(o => o.word);
     grammar['V'] = this.lexicon['V'].map(o => o.word);
     grammar['P'] = this.lexicon['Prep'].map(o => o.word); // Mapping Prep to P
-    grammar['Adv'] = ['softly', 'gently']; // Adding mock Adv for CYK completeness as lexicon doesn't have it yet
+    grammar['Adv'] = this.lexicon['Adv'].map(o => o.word);
 
     return grammar;
+  }
+
+  _selectEntry(symbol, constraints = {}) {
+    const entries = this.lexicon[symbol] ?? [];
+    const candidates = entries.filter(entry => {
+      for (const [key, val] of Object.entries(constraints)) {
+        if (entry.feats && entry.feats[key] && entry.feats[key] !== val) return false;
+      }
+      return true;
+    });
+
+    if (candidates.length > 0) {
+      return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+    if (entries.length > 0) {
+      return entries[Math.floor(Math.random() * entries.length)];
+    }
+    return { word: '?' };
   }
 }

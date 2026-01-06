@@ -51,3 +51,25 @@ This change is documentation-only and does not affect runtime behavior. The veri
 ## Edge Case Reasoning
 - Ensured headings and bullet text remain unchanged aside from whitespace normalization.
 - Confirmed the file renders correctly with standard Markdown list formatting.
+
+## Test Matrix: Linguistic Engine & Corpus Loading
+Each test uses real logic paths without mock data. Run the generation/analysis methods with the inputs below.
+
+- **-1:** Empty string input to `analyze('')` should return `syllables: 1`, empty phoneme string, and stress pattern `[]`.
+- **0:** Single vowel word `analyze('a')` should return one syllable and a vowel-only phoneme string.
+- **1:** Silent-e word `analyze('cake')` should map to a long vowel and keep syllable count at 1.
+- **2:** Vowel-team word `analyze('rain')` should resolve the `ai` team to a long vowel symbol.
+- **3:** Digraph word `analyze('shadow')` should map `sh` to `S` without re-processing the `h`.
+- **4:** Terminal `y` word `analyze('fly')` should end with `Y`.
+- **5:** Mixed prefixes/suffixes `analyze('replaying')` should preserve token order and not double-count vowels.
+- **6:** Intransitive verb generation should not force a direct object (generate multiple `VP` outputs).
+- **7:** Transitive verb generation should prefer `V NP` while still allowing `V` or `V PP` at low probability.
+- **8:** Grammar flattening should include `Adv` from the lexicon (no hardcoded adverbs).
+- **9:** Corpus loader should return lines from `/lyrics/*.txt` when files exist.
+- **10:** Corpus loader should deduplicate identical lines across embedded and file-based sources.
+- **11:** Corpus loader should skip empty lines and whitespace-only lines from lyric files.
+- **12:** Corpus loader should fall back to embedded corpus when no lyric files resolve.
+
+## Execution Notes
+- Use the existing UI controls to trigger sentence generation and analysis for cases 1–8.
+- For corpus validation (cases 9–12), temporarily log the returned array length and sample entries after invoking `loadLyricsCorpus`.
