@@ -84,3 +84,16 @@ This document explains the logic chain for updating `UPDATES_STRATEGY.md` with s
    - **Why:** Verb transitivity must guide whether direct objects appear; adverbs must originate from the lexicon; lyric corpus should load real files when available.
    - **Invariant:** Transitive verbs prefer `V NP`, intransitives avoid object insertion; adverbs are derived from `lexicon.Adv`; corpus loading resolves `/lyrics/*.txt` entries before falling back to embedded lines.
    - **Proof Sketch:** The VP generator branches on `feats.trans` with explicit paths, and `import.meta.glob` enumerates real assets, ensuring coverage without mock fillers.
+
+## Logic Chain: Deterministic Seeding & RNG Propagation (Steps 1–3)
+1. **Identify nondeterministic sources**
+   - **Why:** Kernel PCA initialization, TD(λ) weights, and grammar generation relied on implicit randomness, making runs irreproducible.
+   - **Invariant:** All stochastic paths must consume a single seeded RNG when provided.
+2. **Centralize seeded RNG consumption**
+   - **Why:** A single RNG source enables reproducible training and generation across components.
+   - **Invariant:** KernelPCA, TDValueEstimator, and ConstraintGrammar call the same RNG instance or function.
+   - **Proof Sketch:** Each component accepts a `rng` dependency and defers calls to `rng()` or `rng.next()`, so the RNG state advances deterministically in a single sequence.
+3. **Define deterministic seed resolution**
+   - **Why:** Users need a stable way to set seeds without UI changes.
+   - **Invariant:** When `?seed=` is provided, the engine seed is deterministic for both numeric and string inputs; otherwise, default entropy is used.
+   - **Proof Sketch:** Numeric seeds map directly; string seeds use a deterministic hash (`fnv-1a`), so identical inputs always map to the same 32-bit seed.
