@@ -120,7 +120,7 @@ export class UniversalLinguisticEngine {
     const start = this.clock.now();
     const correlationId = this._getCorrelationId(input);
     const complexity = Number.isFinite(input.complexity) ? Number(input.complexity) : 1;
-    const constraints = input.constraints ?? {};
+    const constraints = input.constraints || {};
 
     if (complexity < 1 || complexity > 5) {
       const err = new LogicChainError('INVALID_INPUT', 'complexity must be between 1 and 5', { complexity });
