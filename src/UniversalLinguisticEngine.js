@@ -3,134 +3,217 @@
 // Provides production-grade phonetics, morphology, and grammar generation logic.
 
 /**
+ * @typedef {{
+ *  code: 'INVALID_INPUT' | 'INVALID_CONSTRAINT' | 'RNG_EXHAUSTED' | 'LEXICON_MISSING' | 'GENERATION_FAILED',
+ *  message: string,
+ *  details?: Record<string, unknown>
+ * }} ChainError
+ */
+
+/**
+ * @typedef {{
+ *  correlation_id?: string,
+ *  step_name: string,
+ *  latency_ms: number,
+ *  [key: string]: unknown
+ * }} StructuredLog
+ */
+
+class LogicChainError extends Error {
+  /**
+   * @param {ChainError['code']} code
+   * @param {string} message
+   * @param {Record<string, unknown>} [details]
+   */
+  constructor(code, message, details = {}) {
+    super(message);
+    this.name = 'LogicChainError';
+    this.code = code;
+    this.details = details;
+  }
+}
+
+class DeterministicClock {
+  constructor(nowMs = 0) {
+    this.nowMs = nowMs;
+  }
+
+  now() {
+    return this.nowMs;
+  }
+}
+
+class CounterIdGenerator {
+  constructor(prefix = 'corr') {
+    this.prefix = prefix;
+    this.counter = 0;
+  }
+
+  next() {
+    this.counter += 1;
+    return `${this.prefix}-${this.counter}`;
+  }
+}
+
+class NullLogger {
+  /** @param {StructuredLog} _entry */
+  info(_entry) {}
+
+  /** @param {StructuredLog} _entry */
+  error(_entry) {}
+}
+
+/**
  * Universal Linguistic Engine
  * A logic-driven system for phonetics, morphology, and syntax generation.
- * Replaces static lookup tables with algorithmic reasoning.
  */
 export class UniversalLinguisticEngine {
-  constructor({ rng } = {}) {
+  constructor({ rng, clock, idGenerator, logger } = {}) {
     this.rng = rng;
+    this.clock = clock ?? new DeterministicClock(0);
+    this.idGenerator = idGenerator ?? new CounterIdGenerator();
+    this.logger = logger ?? new NullLogger();
     this.phonetics = new PhoneticEngine();
-    this.grammar = new ConstraintGrammar(rng);
+    this.grammar = new ConstraintGrammar(this.rng);
   }
 
   /**
-   * Analyze a word for poetic features
+   * Analyze a word for poetic features.
+   * @param {string | {word: string, correlation_id?: string}} input
    */
-  analyze(word) {
+  analyze(input) {
+    const start = this.clock.now();
+    const correlationId = this._getCorrelationId(input);
+
+    const word = typeof input === 'string' ? input : input?.word;
+    if (typeof word !== 'string' || word.trim().length === 0) {
+      const err = new LogicChainError('INVALID_INPUT', 'analyze requires a non-empty word', { input });
+      this._logError(correlationId, 'analyze.validate', start, err);
+      throw err;
+    }
+
     const cleanWord = word.toLowerCase().replace(/[^a-z]/g, '');
+    if (cleanWord.length === 0) {
+      const err = new LogicChainError('INVALID_INPUT', 'word must contain alphabetical characters', { word });
+      this._logError(correlationId, 'analyze.clean', start, err);
+      throw err;
+    }
+
     const phonemes = this.phonetics.toPhonemes(cleanWord);
-    return {
-      word: word,
-      phonemes: phonemes,
+    const result = {
+      word,
+      phonemes,
       syllables: this.phonetics.countSyllablesFromPhonemes(phonemes),
       stressPattern: this.phonetics.estimateStress(phonemes),
       rhymePart: this.phonetics.getRhymePart(phonemes)
     };
+
+    this._logInfo(correlationId, 'analyze.complete', start, { word: cleanWord, syllables: result.syllables });
+    return result;
   }
 
   /**
-   * Generate a sentence structure based on complexity
+   * Generate a sentence structure based on constraints.
+   * @param {{ complexity?: number, constraints?: Record<string, string>, correlation_id?: string }} [input]
    */
-  generateStructure(complexity = 1) {
-    return this.grammar.generate('S', complexity);
+  generateStructure(input = {}) {
+    const start = this.clock.now();
+    const correlationId = this._getCorrelationId(input);
+    const complexity = Number.isFinite(input.complexity) ? Number(input.complexity) : 1;
+    const constraints = input.constraints || {};
+
+    if (complexity < 1 || complexity > 5) {
+      const err = new LogicChainError('INVALID_INPUT', 'complexity must be between 1 and 5', { complexity });
+      this._logError(correlationId, 'generateStructure.validate', start, err);
+      throw err;
+    }
+
+    const sentence = this.grammar.generate('S', { ...constraints, complexity });
+    this._logInfo(correlationId, 'generateStructure.complete', start, { complexity, sentence_length: sentence.length });
+    return sentence;
   }
 
   /**
-   * Get the grammar in a flat format for the CYK parser
+   * Get the grammar in a flat format for the CYK parser.
+   * @param {{ correlation_id?: string }} [input]
    */
-  getGrammar() {
-    return this.grammar.getFlatGrammar();
+  getGrammar(input = {}) {
+    const start = this.clock.now();
+    const correlationId = this._getCorrelationId(input);
+    const grammar = this.grammar.getFlatGrammar();
+    this._logInfo(correlationId, 'getGrammar.complete', start, { non_terminals: Object.keys(grammar).length });
+    return grammar;
+  }
+
+  _getCorrelationId(input) {
+    if (input && typeof input === 'object' && input.correlation_id) {
+      return String(input.correlation_id);
+    }
+    return this.idGenerator.next();
+  }
+
+  _logInfo(correlationId, stepName, startMs, fields = {}) {
+    this.logger.info({
+      correlation_id: correlationId,
+      step_name: stepName,
+      latency_ms: this.clock.now() - startMs,
+      ...fields
+    });
+  }
+
+  _logError(correlationId, stepName, startMs, error) {
+    this.logger.error({
+      correlation_id: correlationId,
+      step_name: stepName,
+      latency_ms: this.clock.now() - startMs,
+      code: error.code,
+      message: error.message,
+      details: error.details
+    });
   }
 }
 
-/**
- * Algorithmic Grapheme-to-Phoneme Engine
- * Uses extensive rule sets to estimate pronunciation for English words.
- * This replaces hardcoded rhyme dictionaries.
- */
 class PhoneticEngine {
   constructor() {
-    // Extensive logic replacing mock data
     this.rules = [
-      // 1. Pre-processing / Special Endings
       { regex: /tion$/g, repl: 'S u n' },
       { regex: /sion$/g, repl: 'Z u n' },
-      { regex: /ough$/g, repl: 'o' }, // simplified (though, rough, cough...)
+      { regex: /ough$/g, repl: 'o' },
       { regex: /igh$/g, repl: 'Y' },
       { regex: /ight/g, repl: 'Y t' },
-
-      // 2. Silent E rules (VCVe pattern)
-      { regex: /([aeiou])([^aeiou])e$/g, repl: '$1:$2' }, // cake -> c A k (long vowel indicator)
-
-      // 3. Vowel Teams & Diphthongs
-      { regex: /ee/g, repl: 'I' }, // feet -> f I t
-      { regex: /ea/g, repl: 'I' }, // tea -> t I
-      { regex: /oo/g, repl: 'U' }, // moon -> m U n
-      { regex: /ou/g, repl: 'W' }, // out -> W t
-      { regex: /ow/g, repl: 'W' }, // cow -> c W
-      { regex: /ai/g, repl: 'A' }, // rain -> r A n
-      { regex: /ay/g, repl: 'A' }, // day -> d A
-      { regex: /oa/g, repl: 'O' }, // boat -> b O t
-      { regex: /ie/g, repl: 'Y' }, // tie -> t Y
-      { regex: /ei/g, repl: 'A' }, // vein -> v A n
-      { regex: /oy/g, repl: 'O Y' }, // boy
-      { regex: /oi/g, repl: 'O Y' }, // boil
-      { regex: /au/g, repl: 'O' },   // auto
-      { regex: /aw/g, repl: 'O' },   // law
-
-      // 4. Consonant Digraphs
+      { regex: /([aeiou])([^aeiou])e$/g, repl: '$1:$2' },
+      { regex: /ee/g, repl: 'I' },
+      { regex: /ea/g, repl: 'I' },
+      { regex: /oo/g, repl: 'U' },
+      { regex: /ou/g, repl: 'W' },
+      { regex: /ow/g, repl: 'W' },
+      { regex: /ai/g, repl: 'A' },
+      { regex: /ay/g, repl: 'A' },
+      { regex: /oa/g, repl: 'O' },
+      { regex: /ie/g, repl: 'Y' },
+      { regex: /ei/g, repl: 'A' },
+      { regex: /oy/g, repl: 'O Y' },
+      { regex: /oi/g, repl: 'O Y' },
+      { regex: /au/g, repl: 'O' },
+      { regex: /aw/g, repl: 'O' },
       { regex: /sh/g, repl: 'S' },
       { regex: /ch/g, repl: 'C' },
-      { regex: /th/g, repl: 'T' }, // voiced/unvoiced conflated for simplicity
+      { regex: /th/g, repl: 'T' },
       { regex: /ph/g, repl: 'F' },
       { regex: /ck/g, repl: 'k' },
       { regex: /wh/g, repl: 'w' },
       { regex: /wr/g, repl: 'r' },
       { regex: /kn/g, repl: 'n' },
       { regex: /gn/g, repl: 'n' },
-      { regex: /ng/g, repl: 'G' }, // ring -> r i G
-
-      // 5. Basic Vowels (simplified for poetic approximation)
-      // Special rule: y at end usually I or E sound
-      { regex: /y$/g, repl: 'E' }, // happy -> h a p E  (often reduced to E or i)
-
+      { regex: /ng/g, repl: 'G' },
+      { regex: /y$/g, repl: 'E' },
       { regex: /a/g, repl: '@' },
       { regex: /e/g, repl: 'E' },
       { regex: /i/g, repl: 'i' },
       { regex: /o/g, repl: 'o' },
       { regex: /u/g, repl: 'u' },
-
-      // 6. Fixups
-      { regex: /:/g, repl: '' }, // remove the silent E marker but keep the long vowel effect?
-      // Actually, my silent E rule was: $1:$2. I need to handle the conversion of $1 to long vowel.
-      // Let's rely on post-processing for that or just map long vowels directly.
+      { regex: /:/g, repl: '' }
     ];
-    this.vowelTeams = new Map([
-      ['ee', 'I'],
-      ['ea', 'I'],
-      ['oo', 'U'],
-      ['ou', 'W'],
-      ['ai', 'A'],
-      ['ay', 'A'],
-      ['oa', 'O'],
-      ['ie', 'Y'],
-      ['ei', 'A']
-    ]);
-    this.consonantDigraphs = new Map([
-      ['sh', 'S'],
-      ['ch', 'C'],
-      ['th', 'T'],
-      ['ph', 'F'],
-      ['ck', 'k']
-    ]);
-    this.longVowels = {
-      a: 'A',
-      e: 'E',
-      i: 'I',
-      o: 'O',
-      u: 'U'
-    };
     this.shortVowels = {
       a: '@',
       e: 'E',
@@ -140,16 +223,8 @@ class PhoneticEngine {
     };
   }
 
-  /**
-   * Converts text to an approximate phoneme representation
-   * @param {string} text
-   * @returns {string} Phonetic string (internal representation)
-   */
   toPhonemes(text) {
     let current = text.toLowerCase();
-
-    // 1. Handle common prefixes/suffixes to isolate root
-    // This helps avoid misapplying rules across morpheme boundaries
     current = current.replace(/^un/g, 'un ');
     current = current.replace(/^re/g, 're ');
     current = current.replace(/^in/g, 'in ');
@@ -160,137 +235,62 @@ class PhoneticEngine {
     current = current.replace(/ment$/g, ' m E n t');
 
     const parts = current.split(' ');
-
-    const phonemizedParts = parts.map(part => {
+    const phonemizedParts = parts.map((part) => {
       let p = part;
-
-      // Special handling for Silent E to promote the preceding vowel
-      // Regex: Vowel + Consonant + e$
-      // We do this before the main loop
       if (/([aeiou])([^aeiou])e$/.test(p)) {
-          p = p.replace(/([aeiou])([^aeiou])e$/, (match, v, c) => {
-             const longV = v.toUpperCase().replace('E', 'I').replace('A', 'A').replace('I', 'Y').replace('O', 'O').replace('U', 'U');
-             // Simplified manual mapping
-             let lv = v;
-             if (v === 'a') lv = 'A';
-             else if (v === 'e') lv = 'I';
-             else if (v === 'i') lv = 'Y';
-             else if (v === 'o') lv = 'O';
-             else if (v === 'u') lv = 'U';
-             return lv + c;
-          });
+        p = p.replace(/([aeiou])([^aeiou])e$/, (match, v, c) => {
+          let lv = v;
+          if (v === 'a') lv = 'A';
+          else if (v === 'e') lv = 'I';
+          else if (v === 'i') lv = 'Y';
+          else if (v === 'o') lv = 'O';
+          else if (v === 'u') lv = 'U';
+          return lv + c;
+        });
       }
 
-      // Apply standard rules in order
       for (const rule of this.rules) {
+        rule.regex.lastIndex = 0;
         if (rule.regex.test(p)) {
-            p = p.replace(rule.regex, rule.repl);
+          p = p.replace(rule.regex, rule.repl);
         }
       }
 
-      // Cleanup
-      p = p.replace(/:/g, '');
-      return p;
+      return p.replace(/:/g, '');
     });
 
     return phonemizedParts.join('');
   }
 
-  _phonemizePart(part) {
-    if (!part) return '';
-    let working = part;
-    if (working.length >= 3) {
-      const last = working[working.length - 1];
-      const consonant = working[working.length - 2];
-      const vowel = working[working.length - 3];
-      if (last === 'e' && this._isVowel(vowel) && !this._isVowel(consonant)) {
-        const head = working.slice(0, -3);
-        const longVowel = this.longVowels[vowel] ?? vowel;
-        working = `${head}${longVowel}${consonant}`;
-      }
-    }
-
-    let phonemes = '';
-    for (let i = 0; i < working.length; i += 1) {
-      const twoChar = working.slice(i, i + 2);
-      if (this.vowelTeams.has(twoChar)) {
-        phonemes += this.vowelTeams.get(twoChar);
-        i += 1;
-        continue;
-      }
-      if (this.consonantDigraphs.has(twoChar)) {
-        phonemes += this.consonantDigraphs.get(twoChar);
-        i += 1;
-        continue;
-      }
-
-      const ch = working[i];
-      if (this.shortVowels[ch]) {
-        phonemes += this.shortVowels[ch];
-        continue;
-      }
-      if (ch === 'y') {
-        phonemes += i === working.length - 1 ? 'Y' : 'y';
-        continue;
-      }
-      phonemes += ch;
-    }
-
-    return phonemes;
-  }
-
-  _isVowel(char) {
-    return Boolean(this.shortVowels[char]);
-  }
-
   countSyllablesFromPhonemes(phonemes) {
-    // Count vowels in our internal representation
-    // Vowels are: @, E, i, o, u, A, I, U, W, O, Y
-    // Also consider dipthongs as one nucleus
     const vowels = phonemes.match(/[@EiouAIUWOY]+/g);
     return vowels ? vowels.length : 1;
   }
 
   estimateStress(phonemes) {
-    // Logic: English tends to stress the first syllable of nouns/adjectives
-    // and second of verbs, but for poetry generation, we might rely on
-    // alternation or simple heuristic.
-    // Extensive Logic: Weight syllables by vowel "length".
-    // Long vowels (A, I, U, O, Y) are more likely to be stressed.
     const syllables = [];
-    let currentSyllable = "";
+    let currentSyllable = '';
 
-    // Simple syllabification: break after vowel
-    for (let char of phonemes) {
-        if ("@EiouAIUWOY".includes(char)) {
-            currentSyllable += char;
-            syllables.push(currentSyllable);
-            currentSyllable = "";
-        } else {
-            currentSyllable += char;
-        }
-    }
-    // Add remaining consonants to last syllable
-    if (currentSyllable.length > 0 && syllables.length > 0) {
-        syllables[syllables.length - 1] += currentSyllable;
-    } else if (currentSyllable.length > 0) {
+    for (const char of phonemes) {
+      if ('@EiouAIUWOY'.includes(char)) {
+        currentSyllable += char;
         syllables.push(currentSyllable);
+        currentSyllable = '';
+      } else {
+        currentSyllable += char;
+      }
     }
 
-    return syllables.map(s => {
-        // Check if contains long vowel
-        if (/[AIUWOY]/.test(s)) return 1;
-        // Fallback: alternating stress if no long vowels found?
-        // For now, simple weight
-        return 0;
-    });
+    if (currentSyllable.length > 0 && syllables.length > 0) {
+      syllables[syllables.length - 1] += currentSyllable;
+    } else if (currentSyllable.length > 0) {
+      syllables.push(currentSyllable);
+    }
+
+    return syllables.map((s) => (/[AIUWOY]/.test(s) ? 1 : 0));
   }
 
-  /**
-   * Extract the rhyming part (last stressed vowel onwards)
-   */
   getRhymePart(phonemes) {
-    // Find last vowel
     const matches = [...phonemes.matchAll(/[@EiouAIUWOY]/g)];
     if (matches.length === 0) return phonemes;
 
@@ -299,10 +299,6 @@ class PhoneticEngine {
   }
 }
 
-/**
- * Feature-Based Context-Free Grammar Engine
- * Supports agreement (Number, Person, Tense) and recursive generation.
- */
 class ConstraintGrammar {
   constructor(rng) {
     this.rng = rng;
@@ -316,11 +312,10 @@ class ConstraintGrammar {
     if (typeof this.rng === 'function') {
       return this.rng();
     }
-    return Math.random();
+    throw new LogicChainError('INVALID_INPUT', 'Deterministic rng is required for generation');
   }
 
   _buildProductionLexicon() {
-    // Extensive Lexicon categorized by features
     return {
       N: [
         { word: 'heart', feats: { num: 'sg' }, tags: ['concrete', 'body'] },
@@ -365,7 +360,7 @@ class ConstraintGrammar {
         { word: 'call', feats: { num: 'pl', tense: 'pres', trans: 'trans' } },
         { word: 'seek', feats: { num: 'pl', tense: 'pres', trans: 'trans' } },
         { word: 'seeks', feats: { num: 'sg', tense: 'pres', trans: 'trans' } },
-        { word: 'lost', feats: { tense: 'past', trans: 'intrans' } }, // often used as adj but kept here
+        { word: 'lost', feats: { tense: 'past', trans: 'intrans' } },
         { word: 'found', feats: { tense: 'past', trans: 'trans' } },
         { word: 'weep', feats: { num: 'pl', tense: 'pres', trans: 'intrans' } },
         { word: 'weeps', feats: { num: 'sg', tense: 'pres', trans: 'intrans' } },
@@ -389,9 +384,12 @@ class ConstraintGrammar {
         { word: 'crystal' }, { word: 'silver' }, { word: 'crimson' }, { word: 'azure' }
       ],
       Adv: [
-        { word: 'softly' }, { word: 'gently' }, { word: 'slowly' }, { word: 'blindly' },
-        { word: 'wildly' }, { word: 'forever' }, { word: 'never' }, { word: 'always' },
-        { word: 'brightly' }, { word: 'darkly' }, { word: 'silently' }, { word: 'deeply' }
+        { word: 'softly', feats: { manner: 'gentle' } },
+        { word: 'gently', feats: { manner: 'gentle' } },
+        { word: 'boldly', feats: { manner: 'strong' } },
+        { word: 'slowly', feats: { manner: 'slow' } },
+        { word: 'brightly', feats: { manner: 'radiant' } },
+        { word: 'quietly', feats: { manner: 'subtle' } }
       ],
       Det: [
         { word: 'the', feats: {} },
@@ -403,14 +401,6 @@ class ConstraintGrammar {
         { word: 'some', feats: {} },
         { word: 'no', feats: {} }
       ],
-      Adv: [
-        { word: 'softly', feats: { manner: 'gentle' } },
-        { word: 'gently', feats: { manner: 'gentle' } },
-        { word: 'boldly', feats: { manner: 'strong' } },
-        { word: 'slowly', feats: { manner: 'slow' } },
-        { word: 'brightly', feats: { manner: 'radiant' } },
-        { word: 'quietly', feats: { manner: 'subtle' } }
-      ],
       Prep: [
         { word: 'in' }, { word: 'on' }, { word: 'through' }, { word: 'beyond' },
         { word: 'beneath' }, { word: 'against' }, { word: 'with' }, { word: 'without' },
@@ -420,165 +410,106 @@ class ConstraintGrammar {
     };
   }
 
-  /**
-   * Helper to select a lexical entry that matches constraints
-   */
-  _selectEntry(symbol, constraints = {}) {
-     if (!this.lexicon[symbol]) return null;
-
-     const candidates = this.lexicon[symbol].filter(entry => {
-        // Check constraints (e.g., number agreement)
-        for (const [key, val] of Object.entries(constraints)) {
-          if (entry.feats && entry.feats[key] && entry.feats[key] !== val) return false;
-        }
-        return true;
-      });
-
-      if (candidates.length === 0) {
-        // Fallback: relax constraints if too strict (simple error recovery)
-        if (this.lexicon[symbol].length > 0) {
-             return this.lexicon[symbol][Math.floor(this._random() * this.lexicon[symbol].length)];
-        }
-        return null;
-      }
-      return candidates[Math.floor(this._random() * candidates.length)];
-  }
-
-  /**
-   * Recursive generator with constraint propagation
-   */
-  generate(symbol, constraints = {}) {
-    // 1. Base Case: Terminal lookup (if symbol exists in lexicon)
-    if (this.lexicon[symbol]) {
-      const entry = this._selectEntry(symbol, constraints);
-      return entry ? entry.word : "?";
-    }
-
-    // 2. Recursive Steps (Grammar Rules)
-    switch (symbol) {
-      case 'S':
-        // S -> NP VP
-        // We decide on a 'number' feature for the subject, which propagates to VP
-        const num = this._random() > 0.5 ? 'sg' : 'pl';
-        return `${this.generate('NP', { num })} ${this.generate('VP', { num })}`;
-
-      case 'NP': {
-        // NP -> Det N | Det Adj N | N (plural/abstract) | Det Adj Adj N
-        const r = this._random();
-
-        // If constraint is not provided, we should decide on one internally so Det and N agree.
-        // If external constraints exists (from S), we use them.
-        let localConstraints = { ...constraints };
-        if (!localConstraints.num) {
-            localConstraints.num = this._random() > 0.5 ? 'sg' : 'pl';
-        }
-
-        if (r < 0.35) {
-             return `${this.generate('Det', localConstraints)} ${this.generate('N', localConstraints)}`;
-        }
-        if (r < 0.7) {
-            return `${this.generate('Det', localConstraints)} ${this.generate('Adj')} ${this.generate('N', localConstraints)}`;
-        }
-        if (r < 0.85) {
-            return `${this.generate('Det', localConstraints)} ${this.generate('Adj')} ${this.generate('Adj')} ${this.generate('N', localConstraints)}`;
-        }
-
-        // Fallback for bare nouns (usually plural or abstract)
-        // If constraint is sg, we should probably force a Det unless it's abstract/mass noun
-        // For simplicity, we'll just allow it but maybe force plural if no det
-        // Actually, if num=sg and we are here, we might just fail to produce valid "Det N" if we skip Det.
-        // So let's force Det if sg
-        if (localConstraints.num === 'sg') {
-             return `${this.generate('Det', localConstraints)} ${this.generate('N', localConstraints)}`;
-        }
-        return this.generate('N', localConstraints);
-      }
-
-      case 'VP':
-        // VP -> V | V NP | V PP | Adv V ...
-        // Check verb transitivity
-        const verbEntry = this._selectEntry('V', constraints);
-        if (!verbEntry) return "exists";
-
-        const verb = verbEntry.word;
-        const trans = verbEntry.feats?.trans || 'intrans';
-
-        // Optional Adverb prefix
-        let prefix = "";
-        if (this._random() < 0.25) {
-            prefix = this.generate('Adv') + " ";
-        }
-
-        if (trans === 'intrans') {
-            // Intransitive: V or V PP
-            if (this._random() < 0.4) {
-                 return `${prefix}${verb} ${this.generate('PP')}`;
-            }
-            return `${prefix}${verb}`;
-        } else {
-            // Transitive: V NP or V NP PP
-            // Note: Object NP doesn't need to agree with Subject (constraints), so we pass empty constraints
-            // or specific ones (like Accusative case if we had cases)
-            // Passing empty constraints allows NP to pick its own number agreement
-             if (this._random() < 0.2) {
-                 return `${prefix}${verb} ${this.generate('NP')} ${this.generate('PP')}`;
-             }
-             return `${prefix}${verb} ${this.generate('NP')}`;
-        }
-
-      case 'PP':
-        return `${this.generate('Prep')} ${this.generate('NP')}`;
-
-      default:
-        return "?";
-    }
-  }
-
-  getFlatGrammar() {
-    // Returns a simplified version for the CYK parser or other components that expect the old format
-    // This bridges the gap between the new logic and the old interface
-    const grammar = {};
-    const symbols = Object.keys(this.lexicon);
-
-    // Add terminals
-    symbols.forEach(sym => {
-        grammar[sym] = this.lexicon[sym].map(o => o.word);
-    });
-
-    // Add rules (Synthesized)
-    // Updated to reflect the richer structure we now support
-    grammar['S'] = [['NP', 'VP'], ['VP'], ['S', 'PP']];
-    grammar['NP'] = [['Det', 'N'], ['N'], ['Adj', 'N'], ['NP', 'PP'], ['Det', 'Adj', 'N']];
-    grammar['VP'] = [['V', 'NP'], ['V'], ['Adv', 'VP'], ['VP', 'PP'], ['Adv', 'V'], ['V', 'PP']];
-    grammar['PP'] = [['P', 'NP'], ['Prep', 'NP']];
-
-    // Ensure all lexical categories are present as non-terminals
-    grammar['Det'] = this.lexicon['Det'].map(o => o.word);
-    grammar['Adj'] = this.lexicon['Adj'].map(o => o.word);
-    grammar['N'] = this.lexicon['N'].map(o => o.word);
-    grammar['V'] = this.lexicon['V'].map(o => o.word);
-    grammar['P'] = this.lexicon['Prep'].map(o => o.word); // Mapping Prep to P
-    grammar['Prep'] = this.lexicon['Prep'].map(o => o.word);
-    grammar['Adv'] = this.lexicon['Adv'].map(o => o.word);
-
-    return grammar;
-  }
-
   _selectEntry(symbol, constraints = {}) {
     const entries = this.lexicon[symbol] ?? [];
-    const candidates = entries.filter(entry => {
+    if (entries.length === 0) {
+      throw new LogicChainError('LEXICON_MISSING', 'No lexicon entries found for symbol', { symbol });
+    }
+
+    const candidates = entries.filter((entry) => {
       for (const [key, val] of Object.entries(constraints)) {
+        if (key === 'complexity') continue;
         if (entry.feats && entry.feats[key] && entry.feats[key] !== val) return false;
       }
       return true;
     });
 
-    if (candidates.length > 0) {
-      return candidates[Math.floor(this._random() * candidates.length)];
+    const pool = candidates.length > 0 ? candidates : entries;
+    const idx = Math.floor(this._random() * pool.length);
+    if (idx < 0 || idx >= pool.length) {
+      throw new LogicChainError('RNG_EXHAUSTED', 'RNG produced an out-of-range index', { symbol, poolLength: pool.length, idx });
     }
-    if (entries.length > 0) {
-      return entries[Math.floor(this._random() * entries.length)];
+    return pool[idx];
+  }
+
+  generate(symbol, constraints = {}) {
+    if (this.lexicon[symbol]) {
+      return this._selectEntry(symbol, constraints).word;
     }
-    return { word: '?' };
+
+    switch (symbol) {
+      case 'S': {
+        const num = this._random() > 0.5 ? 'sg' : 'pl';
+        return `${this.generate('NP', { ...constraints, num })} ${this.generate('VP', { ...constraints, num })}`;
+      }
+      case 'NP': {
+        const r = this._random();
+        const localConstraints = { ...constraints };
+        if (!localConstraints.num) {
+          localConstraints.num = this._random() > 0.5 ? 'sg' : 'pl';
+        }
+
+        if (r < 0.35) {
+          return `${this.generate('Det', localConstraints)} ${this.generate('N', localConstraints)}`;
+        }
+        if (r < 0.7) {
+          return `${this.generate('Det', localConstraints)} ${this.generate('Adj')} ${this.generate('N', localConstraints)}`;
+        }
+        if (r < 0.85) {
+          return `${this.generate('Det', localConstraints)} ${this.generate('Adj')} ${this.generate('Adj')} ${this.generate('N', localConstraints)}`;
+        }
+
+        if (localConstraints.num === 'sg') {
+          return `${this.generate('Det', localConstraints)} ${this.generate('N', localConstraints)}`;
+        }
+        return this.generate('N', localConstraints);
+      }
+      case 'VP': {
+        const verbEntry = this._selectEntry('V', constraints);
+        const verb = verbEntry.word;
+        const trans = verbEntry.feats?.trans || 'intrans';
+        const prefix = this._random() < 0.25 ? `${this.generate('Adv')} ` : '';
+
+        if (trans === 'intrans') {
+          if (this._random() < 0.4) {
+            return `${prefix}${verb} ${this.generate('PP')}`;
+          }
+          return `${prefix}${verb}`;
+        }
+
+        if (this._random() < 0.2) {
+          return `${prefix}${verb} ${this.generate('NP')} ${this.generate('PP')}`;
+        }
+        return `${prefix}${verb} ${this.generate('NP')}`;
+      }
+      case 'PP':
+        return `${this.generate('Prep')} ${this.generate('NP')}`;
+      default:
+        throw new LogicChainError('GENERATION_FAILED', 'Unsupported grammar symbol', { symbol });
+    }
+  }
+
+  getFlatGrammar() {
+    const grammar = {};
+    const symbols = Object.keys(this.lexicon);
+
+    symbols.forEach((sym) => {
+      grammar[sym] = this.lexicon[sym].map((o) => o.word);
+    });
+
+    grammar.S = [['NP', 'VP'], ['VP'], ['S', 'PP']];
+    grammar.NP = [['Det', 'N'], ['N'], ['Adj', 'N'], ['NP', 'PP'], ['Det', 'Adj', 'N']];
+    grammar.VP = [['V', 'NP'], ['V'], ['Adv', 'VP'], ['VP', 'PP'], ['Adv', 'V'], ['V', 'PP']];
+    grammar.PP = [['P', 'NP'], ['Prep', 'NP']];
+
+    grammar.Det = this.lexicon.Det.map((o) => o.word);
+    grammar.Adj = this.lexicon.Adj.map((o) => o.word);
+    grammar.N = this.lexicon.N.map((o) => o.word);
+    grammar.V = this.lexicon.V.map((o) => o.word);
+    grammar.P = this.lexicon.Prep.map((o) => o.word);
+    grammar.Prep = this.lexicon.Prep.map((o) => o.word);
+    grammar.Adv = this.lexicon.Adv.map((o) => o.word);
+
+    return grammar;
   }
 }
