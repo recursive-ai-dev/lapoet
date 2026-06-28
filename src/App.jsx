@@ -533,8 +533,7 @@ class AGTuneEngine {
 
     // Syllable count constraint (8-10 for iambic pentameter)
     this.rete.addRule('syllableLimit', [
-      { key: 'syllableCount', test: (n) => n <= 10 },
-      { key: 'syllableCount', test: (n) => n >= 8 }
+      { key: 'syllableCount', test: (n) => n >= 8 && n <= 10 }
     ], () => true);
 
     // Repetition avoidance
