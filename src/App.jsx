@@ -594,7 +594,14 @@ class AGTuneEngine {
    * Generate iambic pentameter stress pattern (alternating 0/1)
    */
   _getStressPattern(words) {
-    return words.map((_, idx) => idx % 2 === 1 ? 1 : 0);
+    return words.flatMap(word => {
+      try {
+        const analysis = this.ule.analyze(word);
+        return analysis.stressPattern;
+      } catch(e) {
+        return [0];
+      }
+    });
   }
 
   /**
@@ -843,8 +850,14 @@ class AGTuneEngine {
   }
 
   _checkRhymeConsistency(tokens) {
+    if (!tokens || tokens.length === 0) return 0.5;
     const lastWord = tokens[tokens.length - 1];
-    return this._getRhymeGroup(lastWord) !== null ? 1 : 0.5;
+    try {
+      const analysis = this.ule.analyze(lastWord);
+      return analysis.rhymePart ? 1 : 0.5;
+    } catch(e) {
+      return 0.5;
+    }
   }
 
   _calculateRepetitionScore(tokens) {
