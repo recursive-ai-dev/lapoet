@@ -598,7 +598,8 @@ class AGTuneEngine {
       try {
         const analysis = this.ule.analyze(word);
         return analysis.stressPattern;
-      } catch(e) {
+      } catch (e) {
+        console.warn('Stress analysis failed for word:', word, e.message);
         return [0];
       }
     });
@@ -855,7 +856,8 @@ class AGTuneEngine {
     try {
       const analysis = this.ule.analyze(lastWord);
       return analysis.rhymePart ? 1 : 0.5;
-    } catch(e) {
+    } catch (e) {
+      console.warn('Rhyme analysis failed for word:', lastWord, e.message);
       return 0.5;
     }
   }

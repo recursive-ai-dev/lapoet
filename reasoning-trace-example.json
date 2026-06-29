@@ -2,12 +2,12 @@
   "metadata": {
     "version": "1.0",
     "engine": "AG-TUNE",
-    "timestamp": "2026-06-29T15:46:52.299Z",
+    "timestamp": "2026-06-29T15:51:47.579Z",
     "description": "Example reasoning trace for interpretability validation"
   },
   "trace": {
     "line": "shadows dance beneath the moon",
-    "timestamp": "2026-06-29T15:46:52.298Z",
+    "timestamp": "2026-06-29T15:51:47.578Z",
     "emotionalVector": [
       0.32,
       -0.15,
