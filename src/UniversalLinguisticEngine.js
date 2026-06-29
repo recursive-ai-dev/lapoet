@@ -73,7 +73,7 @@ export class UniversalLinguisticEngine {
     this.clock = clock ?? new DeterministicClock(0);
     this.idGenerator = idGenerator ?? new CounterIdGenerator();
     this.logger = logger ?? new NullLogger();
-    this.phonetics = new PhoneticEngine();
+    this.phonetics = new G2PEngine();
     this.grammar = new ConstraintGrammar(this.rng);
   }
 
@@ -173,7 +173,7 @@ export class UniversalLinguisticEngine {
   }
 }
 
-class PhoneticEngine {
+class G2PEngine {
   constructor() {
     this.rules = [
       { regex: /tion$/g, repl: 'S u n' },
