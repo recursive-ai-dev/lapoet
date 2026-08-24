@@ -18,6 +18,46 @@ const FILTERED_PATTERNS = ['icryafterikill']; // Song/album title patterns to fi
 const MIN_LINE_LENGTH = 10; // Minimum characters for a valid lyric line
 
 // ============================================================================
+// LINE-LEVEL METER/RHYME SCORING (real signal for the value estimator, not noise)
+// ============================================================================
+
+function estimateSyllables(word) {
+  const w = word.toLowerCase().replace(/[^a-z]/g, '');
+  if (!w) return 0;
+  const groups = w.match(/[aeiouy]+/g) || [];
+  let count = groups.length;
+  if (w.endsWith('e') && !w.endsWith('le') && count > 1) count -= 1;
+  return Math.max(count, 1);
+}
+
+function getRhymeKey(word) {
+  const w = word.toLowerCase().replace(/[^a-z]/g, '');
+  const match = w.match(/[aeiouy][a-z]*$/);
+  return match ? match[0] : w.slice(-3);
+}
+
+function rhymeSimilarity(a, b) {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const minLen = Math.min(a.length, b.length);
+  let shared = 0;
+  for (let i = 1; i <= minLen; i++) {
+    if (a.slice(-i) === b.slice(-i)) shared = i;
+    else break;
+  }
+  return shared / Math.max(a.length, b.length, 1);
+}
+
+function computeMeterScore(tokens) {
+  if (tokens.length === 0) return 0;
+  const totalSyllables = tokens.reduce((sum, t) => sum + estimateSyllables(t), 0);
+  // Sung lyric lines tend to land around 8-10 syllables; score falls off outside that range
+  const target = 9;
+  const deviation = Math.abs(totalSyllables - target) / target;
+  return Math.max(0, 1 - deviation);
+}
+
+// ============================================================================
 // CORE ALGORITHM IMPLEMENTATIONS (Adapted for Node.js)
 // ============================================================================
 
@@ -34,7 +74,13 @@ class KernelPCA {
   }
 
   _polynomialKernel(x, y) {
-    const dotProduct = x.reduce((sum, xi, i) => sum + xi * y[i], 0);
+    // Normalize inputs (cosine similarity) so the kernel stays bounded
+    // regardless of a word's raw embedding magnitude/frequency — otherwise
+    // (dot+1)^degree explodes for high-frequency words and destabilizes
+    // the eigendecomposition below.
+    const normX = Math.sqrt(x.reduce((sum, xi) => sum + xi * xi, 0)) || 1;
+    const normY = Math.sqrt(y.reduce((sum, yi) => sum + yi * yi, 0)) || 1;
+    const dotProduct = x.reduce((sum, xi, i) => sum + (xi / normX) * (y[i] / normY), 0);
     return Math.pow(dotProduct + 1, this.degree);
   }
 
@@ -72,15 +118,22 @@ class KernelPCA {
     const n = matrix.length;
     const eigenvectors = [];
     const eigenvalues = [];
-    
-    for (let k = 0; k < Math.min(this.nComponents, n); k++) {
-      let v = Array(n).fill().map(() => Math.random() - 0.5);
-      
+
+    // Deflating only once before the power iteration isn't enough: floating-point
+    // drift reintroduces the dominant eigenvector on every multiply, so every
+    // component converges back to the same one. Re-run deflation after each
+    // iteration instead.
+    const deflate = (v) => {
       for (let i = 0; i < eigenvectors.length; i++) {
         const dot = v.reduce((sum, vi, idx) => sum + vi * eigenvectors[i][idx], 0);
         v = v.map((vi, idx) => vi - dot * eigenvectors[i][idx]);
       }
-      
+      return v;
+    };
+
+    for (let k = 0; k < Math.min(this.nComponents, n); k++) {
+      let v = deflate(Array(n).fill().map(() => Math.random() - 0.5));
+
       for (let iter = 0; iter < 50; iter++) {
         let newV = Array(n).fill(0);
         for (let i = 0; i < n; i++) {
@@ -88,23 +141,23 @@ class KernelPCA {
             newV[i] += matrix[i][j] * v[j];
           }
         }
-        v = newV;
-        
-        const norm = Math.sqrt(v.reduce((sum, vi) => sum + vi * vi, 0));
-        v = v.map(vi => vi / norm);
+        newV = deflate(newV);
+
+        const norm = Math.sqrt(newV.reduce((sum, vi) => sum + vi * vi, 0));
+        v = norm > 1e-12 ? newV.map(vi => vi / norm) : newV;
       }
-      
+
       let eigenvalue = 0;
       for (let i = 0; i < n; i++) {
         for (let j = 0; j < n; j++) {
           eigenvalue += v[i] * matrix[i][j] * v[j];
         }
       }
-      
+
       eigenvectors.push(v);
       eigenvalues.push(Math.abs(eigenvalue));
     }
-    
+
     return { eigenvectors, eigenvalues };
   }
 
@@ -304,33 +357,40 @@ class AGTuneEngine {
     
     for (let epoch = 0; epoch < epochs; epoch++) {
       let epochReward = 0;
-      
+      let previousRhymeKey = null;
+
       corpus.forEach((text) => {
         const tokens = this._tokenize(text);
         const states = [];
-        
+
+        const meterScore = computeMeterScore(tokens);
+        const lastWord = tokens[tokens.length - 1];
+        const rhymeKey = lastWord ? getRhymeKey(lastWord) : null;
+        const rhymeConsistency = rhymeSimilarity(rhymeKey, previousRhymeKey);
+        previousRhymeKey = rhymeKey || previousRhymeKey;
+
         for (let i = 0; i < Math.min(tokens.length, 10); i++) {
           const word = tokens[i];
           const eVec = this.emotionalSpace.get(word) || Array(8).fill(0);
-          
+
           states.push({
             eSpaceTraj: [eVec],
-            meterScore: Math.random() * 0.5 + 0.5,
-            rhymeConsistency: Math.random() * 0.5,
+            meterScore,
+            rhymeConsistency,
             novelty: 1.0 - (i / tokens.length),
             lineCount: i,
             themeCoherence: 0.7
           });
         }
-        
+
         for (let i = 0; i < states.length - 1; i++) {
-          const reward = 0.5 + Math.random() * 0.3;
+          const reward = 0.5 * meterScore + 0.5 * rhymeConsistency;
           this.valueEstimator.update(states[i], reward, states[i + 1], false);
           epochReward += reward;
         }
-        
+
         if (states.length > 0) {
-          const finalReward = 0.8;
+          const finalReward = 0.6 * meterScore + 0.4 * rhymeConsistency;
           this.valueEstimator.update(states[states.length - 1], finalReward, states[0], true);
           epochReward += finalReward;
         }

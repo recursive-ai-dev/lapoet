@@ -26,7 +26,13 @@ class KernelPCA {
   }
 
   _polynomialKernel(x, y) {
-    const dotProduct = x.reduce((sum, xi, i) => sum + xi * y[i], 0);
+    // Normalize inputs (cosine similarity) so the kernel stays bounded
+    // regardless of a word's raw embedding magnitude/frequency — otherwise
+    // (dot+1)^degree explodes for high-frequency words and destabilizes
+    // the eigendecomposition below.
+    const normX = Math.sqrt(x.reduce((sum, xi) => sum + xi * xi, 0)) || 1;
+    const normY = Math.sqrt(y.reduce((sum, yi) => sum + yi * yi, 0)) || 1;
+    const dotProduct = x.reduce((sum, xi, i) => sum + (xi / normX) * (y[i] / normY), 0);
     return Math.pow(dotProduct + 1, this.degree);
   }
 
@@ -64,15 +70,22 @@ class KernelPCA {
     const n = matrix.length;
     const eigenvectors = [];
     const eigenvalues = [];
-    
-    for (let k = 0; k < Math.min(this.nComponents, n); k++) {
-      let v = Array(n).fill().map(() => Math.random() - 0.5);
-      
+
+    // Deflating only once before the power iteration isn't enough: floating-point
+    // drift reintroduces the dominant eigenvector on every multiply, so every
+    // component converges back to the same one. Re-run deflation after each
+    // iteration instead.
+    const deflate = (v) => {
       for (let i = 0; i < eigenvectors.length; i++) {
         const dot = v.reduce((sum, vi, idx) => sum + vi * eigenvectors[i][idx], 0);
         v = v.map((vi, idx) => vi - dot * eigenvectors[i][idx]);
       }
-      
+      return v;
+    };
+
+    for (let k = 0; k < Math.min(this.nComponents, n); k++) {
+      let v = deflate(Array(n).fill().map(() => Math.random() - 0.5));
+
       for (let iter = 0; iter < 50; iter++) {
         let newV = Array(n).fill(0);
         for (let i = 0; i < n; i++) {
@@ -80,27 +93,27 @@ class KernelPCA {
             newV[i] += matrix[i][j] * v[j];
           }
         }
-        v = newV;
-        
-        const norm = Math.sqrt(v.reduce((sum, vi) => sum + vi * vi, 0));
+        newV = deflate(newV);
+
+        const norm = Math.sqrt(newV.reduce((sum, vi) => sum + vi * vi, 0));
         if (norm < 1e-10) {
           // Vector collapsed to zero, break early
           break;
         }
-        v = v.map(vi => vi / norm);
+        v = newV.map(vi => vi / norm);
       }
-      
+
       let eigenvalue = 0;
       for (let i = 0; i < n; i++) {
         for (let j = 0; j < n; j++) {
           eigenvalue += v[i] * matrix[i][j] * v[j];
         }
       }
-      
+
       eigenvectors.push(v);
       eigenvalues.push(Math.abs(eigenvalue));
     }
-    
+
     return { eigenvectors, eigenvalues };
   }
 

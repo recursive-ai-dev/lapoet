@@ -240,7 +240,13 @@ class KernelPCA {
   }
 
   _polynomialKernel(x, y) {
-    const dotProduct = x.reduce((sum, xi, i) => sum + xi * y[i], 0);
+    // Normalize inputs (cosine similarity) so the kernel stays bounded
+    // regardless of a word's raw embedding magnitude/frequency — otherwise
+    // (dot+1)^degree explodes for high-frequency words and destabilizes
+    // the eigendecomposition below.
+    const normX = Math.sqrt(x.reduce((sum, xi) => sum + xi * xi, 0)) || 1;
+    const normY = Math.sqrt(y.reduce((sum, yi) => sum + yi * yi, 0)) || 1;
+    const dotProduct = x.reduce((sum, xi, i) => sum + (xi / normX) * (y[i] / normY), 0);
     return Math.pow(dotProduct + 1, this.degree);
   }
 
