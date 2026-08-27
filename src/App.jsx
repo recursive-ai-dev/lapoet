@@ -412,22 +412,13 @@ class CYKParser {
    * Parse token sequence against grammar
    * Returns true if valid sentence structure
    */
-  parse(tokens) {
-    const n = tokens.length;
-    if (n === 0) return true;
-    
-    // Initialize CYK table
-    const table = Array(n).fill().map(() => 
+  _initTable(n) {
+    return Array(n).fill().map(() =>
       Array(n).fill().map(() => new Set())
     );
-    
-    const grammarEntries = Object.entries(this.grammar);
-    // Pre-filter non-terminal productions (length 2) to optimize inner loop
-    const nonTerminalProductions = grammarEntries
-      .map(([nt, prods]) => [nt, prods.filter(p => p.length === 2)])
-      .filter(([nt, prods]) => prods.length > 0);
+  }
 
-    // Terminal productions
+  _fillTerminals(table, tokens, n, grammarEntries) {
     for (let i = 0; i < n; i++) {
       for (const [nt, productions] of grammarEntries) {
         if (productions.includes(tokens[i])) {
@@ -435,8 +426,9 @@ class CYKParser {
         }
       }
     }
-    
-    // Non-terminal productions
+  }
+
+  _fillNonTerminals(table, n, nonTerminalProductions) {
     for (let len = 2; len <= n; len++) {
       for (let i = 0; i <= n - len; i++) {
         const j = i + len - 1;
@@ -446,10 +438,27 @@ class CYKParser {
               const [left, right] = productions[p];
               if (table[i][k].has(left) && table[k+1][j].has(right)) {
                 table[i][j].add(nt);
+              }
+            }
           }
         }
       }
     }
+  }
+
+  parse(tokens) {
+    const n = tokens.length;
+    if (n === 0) return true;
+
+    const table = this._initTable(n);
+
+    const grammarEntries = Object.entries(this.grammar);
+    const nonTerminalProductions = grammarEntries
+      .map(([nt, prods]) => [nt, prods.filter(p => p.length === 2)])
+      .filter(([nt, prods]) => prods.length > 0);
+
+    this._fillTerminals(table, tokens, n, grammarEntries);
+    this._fillNonTerminals(table, n, nonTerminalProductions);
     
     return table[0][n-1].has('S'); // S = start symbol
   }

@@ -245,14 +245,13 @@ class CYKParser {
     });
   }
 
-  parse(tokens) {
-    const n = tokens.length;
-    if (n === 0) return false;
-
-    const table = Array(n).fill().map(() => 
+  _initTable(n) {
+    return Array(n).fill().map(() =>
       Array(n).fill().map(() => new Set())
     );
+  }
 
+  _fillTerminals(table, tokens, n) {
     for (let i = 0; i < n; i++) {
       for (const [lhs, rhsList] of this.rules) {
         for (const rhs of rhsList) {
@@ -262,11 +261,12 @@ class CYKParser {
         }
       }
     }
+  }
 
+  _fillNonTerminals(table, n) {
     for (let length = 2; length <= n; length++) {
       for (let i = 0; i <= n - length; i++) {
         const j = i + length - 1;
-        
         for (let k = i; k < j; k++) {
           for (const [lhs, rhsList] of this.rules) {
             for (const rhs of rhsList) {
@@ -281,6 +281,15 @@ class CYKParser {
         }
       }
     }
+  }
+
+  parse(tokens) {
+    const n = tokens.length;
+    if (n === 0) return false;
+
+    const table = this._initTable(n);
+    this._fillTerminals(table, tokens, n);
+    this._fillNonTerminals(table, n);
 
     return table[0][n - 1].has('S');
   }
