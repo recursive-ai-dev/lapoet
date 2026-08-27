@@ -10,8 +10,6 @@
 // MINIMAL CLASS IMPLEMENTATIONS FOR TESTING
 // ============================================================================
 
-
-
 class KernelPCA {
   constructor(nComponents = 12, degree = 3) {
     this.nComponents = nComponents;
@@ -781,18 +779,21 @@ runTest('Eligibility trace decay: λ → 0 vs λ → 1 behavior differs', () => 
 console.log('\n[2.6] AGTuneEngine Error Path Validation\n');
 
 runTest('Missing Error Path Test: Error in generateLine without training', () => {
-  const engine = {
-    isTrained: false,
-    generateLine(prompt) {
-      if (!this.isTrained) throw new Error('Model must be trained before generation');
-      return prompt;
+  // Creating a simple mock object with a spy-like generateLine function
+  // that throws the required error if isTrained is false. This avoids
+  // duplicating the entire logic from the App.jsx file.
+  const untrainedEngine = { isTrained: false };
+  untrainedEngine.generateLine = function() {
+    if (this.isTrained === false) {
+      throw new Error('Model must be trained before generation');
     }
   };
+
   try {
-    engine.generateLine('test');
+    untrainedEngine.generateLine('prompt');
     return false; // Should not reach here
-  } catch (e) {
-    return e.message === 'Model must be trained before generation';
+  } catch (err) {
+    return err.message === 'Model must be trained before generation';
   }
 });
 
