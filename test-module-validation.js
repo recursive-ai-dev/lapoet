@@ -6,12 +6,6 @@
 // MODULE-LEVEL VALIDATION TESTS FOR AG-TUNE
 // Validates behavioral invariants of each component
 
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 // ============================================================================
 // MINIMAL CLASS IMPLEMENTATIONS FOR TESTING
 // ============================================================================
@@ -797,8 +791,6 @@ runTest('Missing Error Path Test: LogicChainError INVALID_INPUT for non-determin
         errorThrown = true;
         if (e.name === 'LogicChainError' && e.code === 'INVALID_INPUT') {
             rightError = true;
-        } else {
-           console.error("Wrong error thrown: ", e);
         }
     }
     return errorThrown && rightError;
