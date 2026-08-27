@@ -787,12 +787,16 @@ console.log('\n[2.6] Universal Linguistic Engine Validation\n');
 // Test: Missing Error Path Test: LogicChainError INVALID_INPUT in generateStructure
 runTest('generateStructure validates complexity bounds', () => {
   const ule = new UniversalLinguisticEngine({ rng: () => 0.5 });
-  const checkBounds = (val) => {
-    try { ule.generateStructure({ complexity: val }); return false; }
-    catch (e) { return e.code === 'INVALID_INPUT'; }
-  };
+
+  let zeroFailed = false;
+  try { ule.generateStructure({ complexity: 0 }); } catch (e) { zeroFailed = (e.code === 'INVALID_INPUT'); }
+
+  let sixFailed = false;
+  try { ule.generateStructure({ complexity: 6 }); } catch (e) { sixFailed = (e.code === 'INVALID_INPUT'); }
+
   ule.generateStructure({ complexity: 3 });
-  return checkBounds(0) && checkBounds(6);
+
+  return zeroFailed && sixFailed;
 });
 
 // ============================================================================
