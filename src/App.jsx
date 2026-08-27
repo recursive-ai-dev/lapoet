@@ -446,8 +446,6 @@ class CYKParser {
               const [left, right] = productions[p];
               if (table[i][k].has(left) && table[k+1][j].has(right)) {
                 table[i][j].add(nt);
-              }
-            }
           }
         }
       }
