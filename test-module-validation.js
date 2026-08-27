@@ -713,9 +713,34 @@ runTest('Eligibility trace decay: λ → 0 vs λ → 1 behavior differs', () => 
   return distanceBetween > 0.01; // Should be meaningfully different
 });
 
+
+// ============================================================================
+// 2.6 CONSTRAINT GRAMMAR TESTS
+// ============================================================================
+
+console.log('\n[2.6] Constraint Grammar Validation\n');
+
+import { UniversalLinguisticEngine } from './src/UniversalLinguisticEngine.js';
+
+runTest('Missing Error Path Test: LogicChainError INVALID_INPUT for non-deterministic RNG', () => {
+    let errorThrown = false;
+    let rightError = false;
+    try {
+        const ule = new UniversalLinguisticEngine({rng: null});
+        ule.grammar._random();
+    } catch (e) {
+        errorThrown = true;
+        if (e.name === 'LogicChainError' && e.code === 'INVALID_INPUT') {
+            rightError = true;
+        }
+    }
+    return errorThrown && rightError;
+});
+
 // ============================================================================
 // SUMMARY
 // ============================================================================
+
 
 console.log('\n' + '='.repeat(80));
 console.log('MODULE VALIDATION SUMMARY');
