@@ -790,30 +790,21 @@ runTest('generateStructure validates complexity bounds', () => {
     rng: () => 0.5 // Deterministic RNG
   });
 
-  let threwForZero = false;
-  let threwForSix = false;
-  let generatedForThree = false;
-
-  try {
-    engine.generateStructure({ complexity: 0 });
-  } catch (e) {
-    if (e.name === 'LogicChainError' && e.code === 'INVALID_INPUT') {
-      threwForZero = true;
+  const checkError = (complexity) => {
+    try {
+      engine.generateStructure({ complexity });
+      return false;
+    } catch (e) {
+      return e.name === 'LogicChainError' && e.code === 'INVALID_INPUT';
     }
-  }
+  };
 
-  try {
-    engine.generateStructure({ complexity: 6 });
-  } catch (e) {
-    if (e.name === 'LogicChainError' && e.code === 'INVALID_INPUT') {
-      threwForSix = true;
-    }
-  }
+  const threwForZero = checkError(0);
+  const threwForSix = checkError(6);
 
   engine.generateStructure({ complexity: 3 });
-  generatedForThree = true;
 
-  return threwForZero && threwForSix && generatedForThree;
+  return threwForZero && threwForSix;
 });
 
 // ============================================================================
