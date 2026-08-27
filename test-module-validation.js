@@ -9,6 +9,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { UniversalLinguisticEngine } from "./src/UniversalLinguisticEngine.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -776,6 +777,47 @@ runTest('Eligibility trace decay: λ → 0 vs λ → 1 behavior differs', () => 
   console.log(`  Distance between λ=0.1 and λ=0.9 weights: ${distanceBetween.toFixed(4)}`);
   
   return distanceBetween > 0.01; // Should be meaningfully different
+});
+
+
+// ============================================================================
+
+console.log('\n[2.6] Universal Linguistic Engine Validation\n');
+
+// Test: Missing Error Path Test: LogicChainError INVALID_INPUT in generateStructure
+runTest('generateStructure validates complexity bounds', () => {
+  const engine = new UniversalLinguisticEngine({
+    rng: () => 0.5 // Deterministic RNG
+  });
+
+  let threwForZero = false;
+  let threwForSix = false;
+  let generatedForThree = false;
+
+  try {
+    engine.generateStructure({ complexity: 0 });
+  } catch (e) {
+    if (e.name === 'LogicChainError' && e.code === 'INVALID_INPUT') {
+      threwForZero = true;
+    }
+  }
+
+  try {
+    engine.generateStructure({ complexity: 6 });
+  } catch (e) {
+    if (e.name === 'LogicChainError' && e.code === 'INVALID_INPUT') {
+      threwForSix = true;
+    }
+  }
+
+  try {
+    engine.generateStructure({ complexity: 3 });
+    generatedForThree = true;
+  } catch (e) {
+    // Should not throw
+  }
+
+  return threwForZero && threwForSix && generatedForThree;
 });
 
 // ============================================================================
