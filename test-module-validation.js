@@ -57,7 +57,7 @@ class KernelPCA {
     }
     totalMean /= n * n;
 
-    const centered = Array(n).fill().map(() => Array(n).fill(0));
+    const centered = Array.from({ length: n }, () => Array(n).fill(0));
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
         centered[i][j] = K[i][j] - rowMeans[i] - colMeans[j] + totalMean;
@@ -85,7 +85,7 @@ class KernelPCA {
     };
 
     for (let k = 0; k < Math.min(this.nComponents, n); k++) {
-      let v = deflate(Array(n).fill().map(() => Math.random() - 0.5));
+      let v = deflate(Array.from({ length: n }, () => Math.random() - 0.5));
 
       for (let iter = 0; iter < 50; iter++) {
         let newV = Array(n).fill(0);
@@ -122,7 +122,7 @@ class KernelPCA {
     this.X_fit = X;
     const n = X.length;
     
-    const K = Array(n).fill().map(() => Array(n).fill(0));
+    const K = Array.from({ length: n }, () => Array(n).fill(0));
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
         K[i][j] = this._polynomialKernel(X[i], X[j]);
@@ -256,8 +256,8 @@ class CYKParser {
     const n = tokens.length;
     if (n === 0) return false;
 
-    const table = Array(n).fill().map(() => 
-      Array(n).fill().map(() => new Set())
+    const table = Array.from({ length: n }, () =>
+      Array.from({ length: n }, () => new Set())
     );
 
     for (let i = 0; i < n; i++) {
@@ -295,7 +295,7 @@ class CYKParser {
 
 class TDValueEstimator {
   constructor(nFeatures = 24, alpha = 0.01, gamma = 0.95, lambda = 0.8) {
-    this.weights = Array(nFeatures).fill(0).map(() => Math.random() * 0.01);
+    this.weights = Array.from({ length: nFeatures }, () => Math.random() * 0.01);
     this.alpha = alpha;
     this.gamma = gamma;
     this.lambda = lambda;
@@ -589,7 +589,7 @@ runTest('Fuzz testing: Random token sequences are rejected', () => {
   // Random invalid sequences
   let rejectedCount = 0;
   for (let i = 0; i < 20; i++) {
-    const randomTokens = Array(5).fill().map(() => 
+    const randomTokens = Array.from({ length: 5 }, () =>
       ['x', 'y', 'z', 'random', 'invalid'][Math.floor(Math.random() * 5)]
     );
     
