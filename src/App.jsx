@@ -428,19 +428,27 @@ class CYKParser {
     }
   }
 
+  _processProduction(table, i, j, k, nt, productions) {
+    for (let p = 0; p < productions.length; p++) {
+      const [left, right] = productions[p];
+      if (table[i][k].has(left) && table[k+1][j].has(right)) {
+        table[i][j].add(nt);
+      }
+    }
+  }
+
+  _processRules(table, i, j, k, nonTerminalProductions) {
+    for (const [nt, productions] of nonTerminalProductions) {
+      this._processProduction(table, i, j, k, nt, productions);
+    }
+  }
+
   _fillNonTerminals(table, n, nonTerminalProductions) {
     for (let len = 2; len <= n; len++) {
       for (let i = 0; i <= n - len; i++) {
         const j = i + len - 1;
         for (let k = i; k < j; k++) {
-          for (const [nt, productions] of nonTerminalProductions) {
-            for (let p = 0; p < productions.length; p++) {
-              const [left, right] = productions[p];
-              if (table[i][k].has(left) && table[k+1][j].has(right)) {
-                table[i][j].add(nt);
-              }
-            }
-          }
+          this._processRules(table, i, j, k, nonTerminalProductions);
         }
       }
     }
