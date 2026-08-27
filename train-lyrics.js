@@ -468,13 +468,15 @@ class AGTuneEngine {
 async function loadPretrainingData() {
   const pretrainingDir = path.join(__dirname, 'pretraining');
   
-  // Using synchronous fs calls for simplicity in CLI training script
-  if (!fs.existsSync(pretrainingDir)) {
+  // Check if directory exists
+  try {
+    await fs.promises.access(pretrainingDir);
+  } catch (error) {
     console.log('\nNo pretraining directory found, skipping pre-training phase.');
     return [];
   }
   
-  const files = fs.readdirSync(pretrainingDir).filter(f => f.endsWith('.txt'));
+  const files = (await fs.promises.readdir(pretrainingDir)).filter(f => f.endsWith('.txt'));
   
   if (files.length === 0) {
     console.log('\nNo pretraining files found, skipping pre-training phase.');
@@ -485,10 +487,16 @@ async function loadPretrainingData() {
   
   const allData = [];
   
-  for (const file of files) {
-    const filepath = path.join(pretrainingDir, file);
-    const content = fs.readFileSync(filepath, 'utf8');
-    
+  // Read all files concurrently
+  const fileContents = await Promise.all(
+    files.map(async (file) => {
+      const filepath = path.join(pretrainingDir, file);
+      const content = await fs.promises.readFile(filepath, 'utf8');
+      return { file, content };
+    })
+  );
+
+  for (const { file, content } of fileContents) {
     // Split by lines and filter out empty lines
     const lines = content.split('\n')
       .map(line => line.trim())
@@ -504,16 +512,22 @@ async function loadPretrainingData() {
 
 async function loadAllLyrics() {
   const lyricsDir = path.join(__dirname, 'lyrics');
-  const files = fs.readdirSync(lyricsDir).filter(f => f.endsWith('.txt'));
+  const files = (await fs.promises.readdir(lyricsDir)).filter(f => f.endsWith('.txt'));
   
   console.log(`\nFound ${files.length} lyrics files:\n`);
   
   const allLyrics = [];
   
-  for (const file of files) {
-    const filepath = path.join(lyricsDir, file);
-    const content = fs.readFileSync(filepath, 'utf8');
-    
+  // Read all files concurrently
+  const fileContents = await Promise.all(
+    files.map(async (file) => {
+      const filepath = path.join(lyricsDir, file);
+      const content = await fs.promises.readFile(filepath, 'utf8');
+      return { file, content };
+    })
+  );
+
+  for (const { file, content } of fileContents) {
     // Split by lines and filter out empty lines and title lines
     const lines = content.split('\n')
       .map(line => line.trim())
