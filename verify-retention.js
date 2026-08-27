@@ -49,7 +49,20 @@ class AGTuneEngine {
   }
 
   loadCheckpoint(filepath) {
-    const data = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+    let data;
+    try {
+      data = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+      if (typeof data !== 'object' || data === null) {
+        throw new Error('Checkpoint data is not a valid JSON object');
+      }
+      if (!data.vocabulary || !data.embeddings || !data.emotionalSpace) {
+        throw new Error('Checkpoint data is missing required fields');
+      }
+    } catch (error) {
+      console.error(`Error loading checkpoint from ${filepath}: ${error.message}`);
+      throw error;
+    }
+
     
     this.vocabulary = new Map(data.vocabulary);
     this.embeddings = new Map(data.embeddings);
@@ -121,7 +134,7 @@ async function main() {
 
   console.log('\n[Test 1] Initial Load - Verifying checkpoint exists');
   const engine1 = new AGTuneEngine();
-  const data1 = engine1.loadCheckpoint(checkpointPath);
+  engine1.loadCheckpoint(checkpointPath);
   console.log(`✓ Loaded ${engine1.vocabulary.size} words`);
   console.log(`✓ Loaded ${engine1.emotionalSpace.size} emotional vectors`);
   console.log(`✓ TD weights: ${engine1.valueEstimator.weights.length} dimensions`);
