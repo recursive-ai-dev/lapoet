@@ -121,7 +121,7 @@ async function main() {
 
   console.log('\n[Test 1] Initial Load - Verifying checkpoint exists');
   const engine1 = new AGTuneEngine();
-  const data1 = engine1.loadCheckpoint(checkpointPath);
+  engine1.loadCheckpoint(checkpointPath);
   console.log(`✓ Loaded ${engine1.vocabulary.size} words`);
   console.log(`✓ Loaded ${engine1.emotionalSpace.size} emotional vectors`);
   console.log(`✓ TD weights: ${engine1.valueEstimator.weights.length} dimensions`);
