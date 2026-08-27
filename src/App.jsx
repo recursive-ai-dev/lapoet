@@ -443,14 +443,22 @@ class CYKParser {
     }
   }
 
+  _fillSpan(table, i, length, nonTerminalProductions) {
+    const j = i + length - 1;
+    for (let k = i; k < j; k++) {
+      this._processRules(table, i, j, k, nonTerminalProductions);
+    }
+  }
+
+  _fillLength(table, n, length, nonTerminalProductions) {
+    for (let i = 0; i <= n - length; i++) {
+      this._fillSpan(table, i, length, nonTerminalProductions);
+    }
+  }
+
   _fillNonTerminals(table, n, nonTerminalProductions) {
     for (let len = 2; len <= n; len++) {
-      for (let i = 0; i <= n - len; i++) {
-        const j = i + len - 1;
-        for (let k = i; k < j; k++) {
-          this._processRules(table, i, j, k, nonTerminalProductions);
-        }
-      }
+      this._fillLength(table, n, len, nonTerminalProductions);
     }
   }
 

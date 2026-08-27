@@ -54,14 +54,22 @@ export class CYKParser {
     }
   }
 
+  _fillSpan(table, i, length) {
+    const j = i + length - 1;
+    for (let k = i; k < j; k++) {
+      this._processRules(table, i, j, k);
+    }
+  }
+
+  _fillLength(table, n, length) {
+    for (let i = 0; i <= n - length; i++) {
+      this._fillSpan(table, i, length);
+    }
+  }
+
   _fillNonTerminals(table, n) {
     for (let length = 2; length <= n; length++) {
-      for (let i = 0; i <= n - length; i++) {
-        const j = i + length - 1;
-        for (let k = i; k < j; k++) {
-          this._processRules(table, i, j, k);
-        }
-      }
+      this._fillLength(table, n, length);
     }
   }
 
