@@ -10,6 +10,17 @@
 // MINIMAL CLASS IMPLEMENTATIONS FOR TESTING
 // ============================================================================
 
+class AGTuneEngine {
+  constructor() {
+    this.isTrained = false;
+  }
+  generateLine(prompt) {
+    if (!this.isTrained) throw new Error('Model must be trained before generation');
+    return prompt;
+  }
+}
+
+
 class KernelPCA {
   constructor(nComponents = 12, degree = 3) {
     this.nComponents = nComponents;
@@ -770,6 +781,22 @@ runTest('Eligibility trace decay: λ → 0 vs λ → 1 behavior differs', () => 
   console.log(`  Distance between λ=0.1 and λ=0.9 weights: ${distanceBetween.toFixed(4)}`);
   
   return distanceBetween > 0.01; // Should be meaningfully different
+});
+
+// ============================================================================
+// [2.6] AGTuneEngine ERROR PATH VALIDATION
+// ============================================================================
+
+console.log('\n[2.6] AGTuneEngine Error Path Validation\n');
+
+runTest('Missing Error Path Test: Error in generateLine without training', () => {
+  const engine = new AGTuneEngine();
+  try {
+    engine.generateLine('test');
+    return false; // Should not reach here
+  } catch (e) {
+    return e.message === 'Model must be trained before generation';
+  }
 });
 
 // ============================================================================
