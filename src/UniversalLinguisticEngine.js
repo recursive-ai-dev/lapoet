@@ -56,11 +56,13 @@ class CounterIdGenerator {
 }
 
 class NullLogger {
-  /** @param {StructuredLog} _entry */
-  info(_entry) {}
+  info() {
+    // no-op
+  }
 
-  /** @param {StructuredLog} _entry */
-  error(_entry) {}
+  error() {
+    // no-op
+  }
 }
 
 /**

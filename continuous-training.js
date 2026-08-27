@@ -401,7 +401,20 @@ class AGTuneEngine {
   }
 
   loadCheckpoint(filepath) {
-    const data = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+    let data;
+    try {
+      data = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+      if (typeof data !== 'object' || data === null) {
+        throw new Error('Checkpoint data is not a valid JSON object');
+      }
+      if (!data.vocabulary || !data.embeddings || !data.emotionalSpace) {
+        throw new Error('Checkpoint data is missing required fields');
+      }
+    } catch (error) {
+      console.error(`Error loading checkpoint from ${filepath}: ${error.message}`);
+      throw error;
+    }
+
     
     this.vocabulary = new Map(data.vocabulary);
     this.embeddings = new Map(data.embeddings);
@@ -425,24 +438,25 @@ class AGTuneEngine {
 
 async function loadLyricsSubset(files) {
   const lyricsDir = path.join(__dirname, 'lyrics');
-  const allLyrics = [];
   
-  for (const file of files) {
+  const promises = files.map(async (file) => {
     const filepath = path.join(lyricsDir, file);
-    if (!fs.existsSync(filepath)) continue;
-    
-    const content = fs.readFileSync(filepath, 'utf8');
-    const lines = content.split('\n')
-      .map(line => line.trim())
-      .filter(line => {
-        return line.length > MIN_LINE_LENGTH && 
-               !FILTERED_PATTERNS.some(pattern => line === pattern);
-      });
-    
-    allLyrics.push(...lines);
-  }
+    try {
+      const content = await fs.promises.readFile(filepath, 'utf8');
+      return content.split('\n')
+        .map(line => line.trim())
+        .filter(line => {
+          return line.length > MIN_LINE_LENGTH &&
+                 !FILTERED_PATTERNS.some(pattern => line === pattern);
+        });
+    } catch (err) {
+      if (err.code === 'ENOENT') return [];
+      throw err;
+    }
+  });
   
-  return allLyrics;
+  const results = await Promise.all(promises);
+  return results.flat();
 }
 
 async function main() {
