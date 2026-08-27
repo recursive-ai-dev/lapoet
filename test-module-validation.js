@@ -6,12 +6,6 @@
 // MODULE-LEVEL VALIDATION TESTS FOR AG-TUNE
 // Validates behavioral invariants of each component
 
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 // ============================================================================
 // MINIMAL CLASS IMPLEMENTATIONS FOR TESTING
 // ============================================================================
