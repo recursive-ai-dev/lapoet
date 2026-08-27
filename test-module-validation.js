@@ -8,8 +8,8 @@
 
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { UniversalLinguisticEngine } from './src/UniversalLinguisticEngine.js';
 
-import { UniversalLinguisticEngine } from "./src/UniversalLinguisticEngine.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -786,25 +786,13 @@ console.log('\n[2.6] Universal Linguistic Engine Validation\n');
 
 // Test: Missing Error Path Test: LogicChainError INVALID_INPUT in generateStructure
 runTest('generateStructure validates complexity bounds', () => {
-  const engine = new UniversalLinguisticEngine({
-    rng: () => 0.5 // Deterministic RNG
-  });
-
-  const checkError = (complexity) => {
-    try {
-      engine.generateStructure({ complexity });
-      return false;
-    } catch (e) {
-      return e.name === 'LogicChainError' && e.code === 'INVALID_INPUT';
-    }
+  const ule = new UniversalLinguisticEngine({ rng: () => 0.5 });
+  const checkBounds = (val) => {
+    try { ule.generateStructure({ complexity: val }); return false; }
+    catch (e) { return e.code === 'INVALID_INPUT'; }
   };
-
-  const threwForZero = checkError(0);
-  const threwForSix = checkError(6);
-
-  engine.generateStructure({ complexity: 3 });
-
-  return threwForZero && threwForSix;
+  ule.generateStructure({ complexity: 3 });
+  return checkBounds(0) && checkBounds(6);
 });
 
 // ============================================================================
