@@ -421,9 +421,11 @@ class CYKParser {
       Array(n).fill().map(() => new Set())
     );
     
+    const grammarEntries = Object.entries(this.grammar);
+
     // Terminal productions
     for (let i = 0; i < n; i++) {
-      for (const [nt, productions] of Object.entries(this.grammar)) {
+      for (const [nt, productions] of grammarEntries) {
         if (productions.includes(tokens[i])) {
           table[i][i].add(nt);
         }
@@ -435,7 +437,7 @@ class CYKParser {
       for (let i = 0; i <= n - len; i++) {
         const j = i + len - 1;
         for (let k = i; k < j; k++) {
-          for (const [nt, productions] of Object.entries(this.grammar)) {
+          for (const [nt, productions] of grammarEntries) {
             for (const prod of productions) {
               if (prod.length === 2) {
                 const [left, right] = prod;
