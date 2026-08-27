@@ -413,17 +413,21 @@ class CYKParser {
    * Returns true if valid sentence structure
    */
   _initTable(n) {
-    return Array(n).fill().map(() =>
-      Array(n).fill().map(() => new Set())
+    return Array.from({ length: n }, () =>
+      Array.from({ length: n }, () => new Set())
     );
+  }
+
+  _processTerminalProduction(table, i, tokens, nt, productions) {
+    if (productions.includes(tokens[i])) {
+      table[i][i].add(nt);
+    }
   }
 
   _fillTerminals(table, tokens, n, grammarEntries) {
     for (let i = 0; i < n; i++) {
       for (const [nt, productions] of grammarEntries) {
-        if (productions.includes(tokens[i])) {
-          table[i][i].add(nt);
-        }
+        this._processTerminalProduction(table, i, tokens, nt, productions);
       }
     }
   }

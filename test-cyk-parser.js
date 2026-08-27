@@ -20,19 +20,23 @@ export class CYKParser {
   }
 
   _initTable(n) {
-    return Array(n).fill().map(() =>
-      Array(n).fill().map(() => new Set())
+    return Array.from({ length: n }, () =>
+      Array.from({ length: n }, () => new Set())
     );
+  }
+
+  _processTerminalRule(table, i, tokens, lhs, rhsList) {
+    for (const rhs of rhsList) {
+      if (rhs.length === 1 && rhs[0] === tokens[i]) {
+        table[i][i].add(lhs);
+      }
+    }
   }
 
   _fillTerminals(table, tokens, n) {
     for (let i = 0; i < n; i++) {
       for (const [lhs, rhsList] of this.rules) {
-        for (const rhs of rhsList) {
-          if (rhs.length === 1 && rhs[0] === tokens[i]) {
-            table[i][i].add(lhs);
-          }
-        }
+        this._processTerminalRule(table, i, tokens, lhs, rhsList);
       }
     }
   }
