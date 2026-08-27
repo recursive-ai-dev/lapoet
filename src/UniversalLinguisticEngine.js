@@ -56,13 +56,9 @@ class CounterIdGenerator {
 }
 
 class NullLogger {
-  info() {
-    // no-op
-  }
+  info() { /* no-op logger */ }
 
-  error() {
-    // no-op
-  }
+  error() { /* no-op logger */ }
 }
 
 /**
