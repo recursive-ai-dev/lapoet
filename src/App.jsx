@@ -412,44 +412,73 @@ class CYKParser {
    * Parse token sequence against grammar
    * Returns true if valid sentence structure
    */
+  _initTable(n) {
+    return Array.from({ length: n }, () =>
+      Array.from({ length: n }, () => new Set())
+    );
+  }
+
+  _processTerminalProduction(table, i, tokens, nt, productions) {
+    if (productions.includes(tokens[i])) {
+      table[i][i].add(nt);
+    }
+  }
+
+  _fillTerminals(table, tokens, n, grammarEntries) {
+    for (let i = 0; i < n; i++) {
+      for (const [nt, productions] of grammarEntries) {
+        this._processTerminalProduction(table, i, tokens, nt, productions);
+      }
+    }
+  }
+
+  _processProduction(table, i, j, k, nt, productions) {
+    for (let p = 0; p < productions.length; p++) {
+      const [left, right] = productions[p];
+      if (table[i][k].has(left) && table[k+1][j].has(right)) {
+        table[i][j].add(nt);
+      }
+    }
+  }
+
+  _processRules(table, i, j, k, nonTerminalProductions) {
+    for (const [nt, productions] of nonTerminalProductions) {
+      this._processProduction(table, i, j, k, nt, productions);
+    }
+  }
+
+  _fillSpan(table, i, length, nonTerminalProductions) {
+    const j = i + length - 1;
+    for (let k = i; k < j; k++) {
+      this._processRules(table, i, j, k, nonTerminalProductions);
+    }
+  }
+
+  _fillLength(table, n, length, nonTerminalProductions) {
+    for (let i = 0; i <= n - length; i++) {
+      this._fillSpan(table, i, length, nonTerminalProductions);
+    }
+  }
+
+  _fillNonTerminals(table, n, nonTerminalProductions) {
+    for (let len = 2; len <= n; len++) {
+      this._fillLength(table, n, len, nonTerminalProductions);
+    }
+  }
+
   parse(tokens) {
     const n = tokens.length;
     if (n === 0) return true;
-    
-    // Initialize CYK table
-    const table = Array(n).fill().map(() => 
-      Array(n).fill().map(() => new Set())
-    );
-    
+
+    const table = this._initTable(n);
+
     const grammarEntries = Object.entries(this.grammar);
-    // Pre-filter non-terminal productions (length 2) to optimize inner loop
     const nonTerminalProductions = grammarEntries
       .map(([nt, prods]) => [nt, prods.filter(p => p.length === 2)])
       .filter(([nt, prods]) => prods.length > 0);
 
-    // Terminal productions
-    for (let i = 0; i < n; i++) {
-      for (const [nt, productions] of grammarEntries) {
-        if (productions.includes(tokens[i])) {
-          table[i][i].add(nt);
-        }
-      }
-    }
-    
-    // Non-terminal productions
-    for (let len = 2; len <= n; len++) {
-      for (let i = 0; i <= n - len; i++) {
-        const j = i + len - 1;
-        for (let k = i; k < j; k++) {
-          for (const [nt, productions] of nonTerminalProductions) {
-            for (let p = 0; p < productions.length; p++) {
-              const [left, right] = productions[p];
-              if (table[i][k].has(left) && table[k+1][j].has(right)) {
-                table[i][j].add(nt);
-          }
-        }
-      }
-    }
+    this._fillTerminals(table, tokens, n, grammarEntries);
+    this._fillNonTerminals(table, n, nonTerminalProductions);
     
     return table[0][n-1].has('S'); // S = start symbol
   }
