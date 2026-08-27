@@ -401,7 +401,20 @@ class AGTuneEngine {
   }
 
   loadCheckpoint(filepath) {
-    const data = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+    let data;
+    try {
+      data = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+      if (typeof data !== 'object' || data === null) {
+        throw new Error('Checkpoint data is not a valid JSON object');
+      }
+      if (!data.vocabulary || !data.embeddings || !data.emotionalSpace) {
+        throw new Error('Checkpoint data is missing required fields');
+      }
+    } catch (error) {
+      console.error(`Error loading checkpoint from ${filepath}: ${error.message}`);
+      throw error;
+    }
+
     
     this.vocabulary = new Map(data.vocabulary);
     this.embeddings = new Map(data.embeddings);
