@@ -810,12 +810,8 @@ runTest('generateStructure validates complexity bounds', () => {
     }
   }
 
-  try {
-    engine.generateStructure({ complexity: 3 });
-    generatedForThree = true;
-  } catch (e) {
-    // Should not throw
-  }
+  engine.generateStructure({ complexity: 3 });
+  generatedForThree = true;
 
   return threwForZero && threwForSix && generatedForThree;
 });
