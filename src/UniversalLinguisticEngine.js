@@ -131,8 +131,10 @@ export class UniversalLinguisticEngine {
     }
 
     const sentence = this.grammar.generate('S', { ...constraints, complexity });
-    this._logInfo(correlationId, 'generateStructure.complete', start, { complexity, sentence_length: sentence.length });
-    return sentence;
+    // Post-process into a proper sentence: capitalize + terminal punctuation.
+    const polished = sentence.charAt(0).toUpperCase() + sentence.slice(1) + '.';
+    this._logInfo(correlationId, 'generateStructure.complete', start, { complexity, sentence_length: polished.length });
+    return polished;
   }
 
   /**
@@ -194,8 +196,8 @@ class G2PEngine {
       { regex: /oa/g, repl: 'O' },
       { regex: /ie/g, repl: 'Y' },
       { regex: /ei/g, repl: 'A' },
-      { regex: /oy/g, repl: 'O Y' },
-      { regex: /oi/g, repl: 'O Y' },
+      { regex: /oy/g, repl: 'OY' },
+      { regex: /oi/g, repl: 'OY' },
       { regex: /au/g, repl: 'O' },
       { regex: /aw/g, repl: 'O' },
       { regex: /sh/g, repl: 'S' },
@@ -209,6 +211,9 @@ class G2PEngine {
       { regex: /gn/g, repl: 'n' },
       { regex: /ng/g, repl: 'G' },
       { regex: /y$/g, repl: 'E' },
+      // Word-internal 'y' between consonants ("myth", "system") is a vowel;
+      // keep it consonantal when adjacent to a true vowel ("yes", "beyond").
+      { regex: /(^|[^aeiou])y(?=[^aeiou])/g, repl: '$1i' },
       { regex: /a/g, repl: '@' },
       { regex: /e/g, repl: 'E' },
       { regex: /i/g, repl: 'i' },
@@ -270,23 +275,43 @@ class G2PEngine {
   }
 
   estimateStress(phonemes) {
+    // Split into syllables at vowel onsets. Consecutive vowel symbols form a
+    // single nucleus (e.g. the 'OY' diphthong counts as ONE syllable, keeping
+    // this consistent with countSyllablesFromPhonemes' vowel-run counting).
+    const VOWEL_SET = new Set(['@', 'E', 'i', 'o', 'u', 'A', 'I', 'U', 'W', 'O', 'Y']);
     const syllables = [];
-    let currentSyllable = '';
+    let current = '';
+    let hasVowel = false;
+    let codaStarted = false;
 
     for (const char of phonemes) {
-      if ('@EiouAIUWOY'.includes(char)) {
-        currentSyllable += char;
-        syllables.push(currentSyllable);
-        currentSyllable = '';
-      } else {
-        currentSyllable += char;
+      const isVowel = VOWEL_SET.has(char);
+      if (isVowel && hasVowel && codaStarted) {
+        // New nucleus: close the current syllable, handing the trailing
+        // consonant cluster over as the onset of the next one.
+        const m = current.match(/^(.*?)([^@EiouAIUWOY]+)$/);
+        if (m && m[1]) {
+          syllables.push(m[1]);
+          current = m[2] + char;
+        } else {
+          syllables.push(current);
+          current = char;
+        }
+        hasVowel = true;
+        codaStarted = false;
+        continue;
+      }
+      current += char;
+      if (isVowel) {
+        hasVowel = true;
+        codaStarted = false;
+      } else if (hasVowel) {
+        codaStarted = true;
       }
     }
 
-    if (currentSyllable.length > 0 && syllables.length > 0) {
-      syllables[syllables.length - 1] += currentSyllable;
-    } else if (currentSyllable.length > 0) {
-      syllables.push(currentSyllable);
+    if (current.length > 0) {
+      syllables.push(current);
     }
 
     return syllables.map((s) => (/[AIUWOY]/.test(s) ? 1 : 0));
@@ -493,24 +518,38 @@ class ConstraintGrammar {
 
   getFlatGrammar() {
     const grammar = {};
-    const symbols = Object.keys(this.lexicon);
 
-    symbols.forEach((sym) => {
-      grammar[sym] = this.lexicon[sym].map((o) => o.word);
-    });
-
-    grammar.S = [['NP', 'VP'], ['VP'], ['S', 'PP']];
-    grammar.NP = [['Det', 'N'], ['N'], ['Adj', 'N'], ['NP', 'PP'], ['Det', 'Adj', 'N']];
-    grammar.VP = [['V', 'NP'], ['V'], ['Adv', 'VP'], ['VP', 'PP'], ['Adv', 'V'], ['V', 'PP']];
-    grammar.PP = [['P', 'NP'], ['Prep', 'NP']];
-
+    // Terminal productions (single source of truth from the lexicon).
     grammar.Det = this.lexicon.Det.map((o) => o.word);
     grammar.Adj = this.lexicon.Adj.map((o) => o.word);
     grammar.N = this.lexicon.N.map((o) => o.word);
     grammar.V = this.lexicon.V.map((o) => o.word);
     grammar.P = this.lexicon.Prep.map((o) => o.word);
-    grammar.Prep = this.lexicon.Prep.map((o) => o.word);
     grammar.Adv = this.lexicon.Adv.map((o) => o.word);
+
+    // Phrasal productions, aligned with ConstraintGrammar.generate().
+    // n-ary right-hand sides are supported by the CYK parser via span DP.
+    grammar.S = [['NP', 'VP']];
+    grammar.NP = [
+      ['Det', 'N'],
+      ['N'],
+      ['Adj', 'N'],
+      ['NP', 'PP'],
+      ['Det', 'Adj', 'N'],
+      ['Det', 'Adj', 'Adj', 'N']
+    ];
+    grammar.VP = [
+      ['V', 'NP'],
+      ['V'],
+      ['Adv', 'V'],
+      ['VP', 'PP'],
+      ['V', 'PP'],
+      ['V', 'NP', 'PP'],
+      ['Adv', 'V', 'NP'],
+      ['Adv', 'V', 'PP'],
+      ['Adv', 'V', 'NP', 'PP']
+    ];
+    grammar.PP = [['P', 'NP']];
 
     return grammar;
   }
