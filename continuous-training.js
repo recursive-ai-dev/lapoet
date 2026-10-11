@@ -459,15 +459,7 @@ async function loadLyricsSubset(files) {
   return results.flat();
 }
 
-async function main() {
-  console.log('='.repeat(70));
-  console.log('CONTINUOUS TRAINING DEMONSTRATION');
-  console.log('Proving indefinite information retention across multiple sessions');
-  console.log('='.repeat(70));
-
-  const checkpointPath = path.join(__dirname, 'continuous-checkpoint.json');
-  
-  // Session 1: Train on first batch of lyrics
+async function runSession1(checkpointPath) {
   console.log('\n[Session 1] Training on first batch of lyrics...');
   const engine1 = new AGTuneEngine();
   const batch1 = await loadLyricsSubset([
@@ -485,15 +477,17 @@ async function main() {
   console.log(`  ✓ Session 1 checkpoint saved`);
   
   // Track some words for verification
-  const trackedWords = TRACKED_WORDS;
   const session1Vectors = new Map();
-  trackedWords.forEach(word => {
+  TRACKED_WORDS.forEach(word => {
     if (engine1.emotionalSpace.has(word)) {
       session1Vectors.set(word, [...engine1.emotionalSpace.get(word)]);
     }
   });
 
-  // Session 2: Load checkpoint and train on more lyrics
+  return { engine: engine1, batch: batch1, session1Vectors };
+}
+
+async function runSession2(checkpointPath, previousBatch) {
   console.log('\n[Session 2] Loading checkpoint and adding more lyrics...');
   const engine2 = new AGTuneEngine();
   engine2.loadCheckpoint(checkpointPath);
@@ -507,7 +501,7 @@ async function main() {
   ]);
   
   console.log(`  Adding ${batch2.length} more lines`);
-  const reward2 = engine2.train([...batch1, ...batch2], 30);
+  const reward2 = engine2.train([...previousBatch, ...batch2], 30);
   console.log(`  Trained with avg reward: ${reward2.toFixed(4)}`);
   console.log(`  Vocabulary size: ${engine2.vocabulary.size}`);
   
@@ -516,7 +510,7 @@ async function main() {
   
   // Verify Session 1 words are still present
   console.log('\n  Verifying Session 1 words retained:');
-  trackedWords.forEach(word => {
+  TRACKED_WORDS.forEach(word => {
     if (engine2.emotionalSpace.has(word)) {
       console.log(`    ✓ "${word}" still present`);
     } else {
@@ -524,7 +518,10 @@ async function main() {
     }
   });
 
-  // Session 3: Load again and train on final batch
+  return { engine: engine2, batch: batch2 };
+}
+
+async function runSession3(checkpointPath, previousBatches) {
   console.log('\n[Session 3] Loading checkpoint and adding final batch...');
   const engine3 = new AGTuneEngine();
   engine3.loadCheckpoint(checkpointPath);
@@ -538,7 +535,7 @@ async function main() {
   ]);
   
   console.log(`  Adding ${batch3.length} more lines`);
-  const reward3 = engine3.train([...batch1, ...batch2, ...batch3], 30);
+  const reward3 = engine3.train([...previousBatches, ...batch3], 30);
   console.log(`  Trained with avg reward: ${reward3.toFixed(4)}`);
   console.log(`  Vocabulary size: ${engine3.vocabulary.size}`);
   
@@ -547,7 +544,7 @@ async function main() {
   
   // Final verification
   console.log('\n  Final verification of all tracked words:');
-  trackedWords.forEach(word => {
+  TRACKED_WORDS.forEach(word => {
     if (engine3.emotionalSpace.has(word)) {
       console.log(`    ✓ "${word}" retained across 3 sessions`);
     } else {
@@ -555,19 +552,37 @@ async function main() {
     }
   });
 
-  // Summary
+  return { engine: engine3, batch: batch3 };
+}
+
+function printSummary(session1, session2, session3) {
   console.log('\n' + '='.repeat(70));
   console.log('CONTINUOUS TRAINING SUMMARY');
   console.log('='.repeat(70));
-  console.log(`Session 1: ${batch1.length} lines, ${engine1.vocabulary.size} words`);
-  console.log(`Session 2: ${batch1.length + batch2.length} lines total`);
-  console.log(`Session 3: ${batch1.length + batch2.length + batch3.length} lines total`);
-  console.log(`\nFinal vocabulary: ${engine3.vocabulary.size} unique words`);
-  console.log(`Final emotional vectors: ${engine3.emotionalSpace.size}`);
+  console.log(`Session 1: ${session1.batch.length} lines, ${session1.engine.vocabulary.size} words`);
+  console.log(`Session 2: ${session1.batch.length + session2.batch.length} lines total`);
+  console.log(`Session 3: ${session1.batch.length + session2.batch.length + session3.batch.length} lines total`);
+  console.log(`\nFinal vocabulary: ${session3.engine.vocabulary.size} unique words`);
+  console.log(`Final emotional vectors: ${session3.engine.emotionalSpace.size}`);
   console.log('\n✓ Model successfully retained information across 3 training sessions');
   console.log('✓ Information persists indefinitely through checkpoints');
   console.log('✓ Can continue adding new lyrics without losing old knowledge');
   console.log('='.repeat(70));
+}
+
+async function main() {
+  console.log('='.repeat(70));
+  console.log('CONTINUOUS TRAINING DEMONSTRATION');
+  console.log('Proving indefinite information retention across multiple sessions');
+  console.log('='.repeat(70));
+
+  const checkpointPath = path.join(__dirname, 'continuous-checkpoint.json');
+
+  const session1 = await runSession1(checkpointPath);
+  const session2 = await runSession2(checkpointPath, session1.batch);
+  const session3 = await runSession3(checkpointPath, [...session1.batch, ...session2.batch]);
+
+  printSummary(session1, session2, session3);
   
   // Cleanup
   if (fs.existsSync(checkpointPath)) {
