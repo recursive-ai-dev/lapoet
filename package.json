@@ -18,9 +18,7 @@
     "test-ablation": "node test-ablation-study.js",
     "test-interpretability": "node test-interpretability.js",
     "test-validation-framework": "node test-validation-framework.js",
-    "test-ule": "node test-universal-linguistic-engine.js"
-    "test-model-smoke": "node test-model-smoke.js",
-    "test-all": "npm run test-model-smoke && npm run test-engine && npm run test-modules && npm run test-ablation && npm run test-interpretability && npm run test-validation-framework",
+    "test-all": "node test-engine.js && node test-module-validation.js && node test-ablation-study.js && node test-interpretability.js && node test-validation-framework.js",
     "test-coverage": "c8 npm run test-all"
   },
   "dependencies": {

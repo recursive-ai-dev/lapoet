@@ -17,23 +17,10 @@ if (!fs.existsSync(checkpointPath)) {
   process.exit(1);
 }
 
-let checkpoint;
-try {
-  checkpoint = JSON.parse(fs.readFileSync(checkpointPath, 'utf8'));
-  if (typeof checkpoint !== 'object' || checkpoint === null) {
-    throw new Error('Checkpoint data is not a valid JSON object');
-  }
-  if (!checkpoint.vocabulary || !checkpoint.emotionalSpace) {
-    throw new Error('Checkpoint data is missing required fields');
-  }
-} catch (error) {
-  console.error(`Error loading checkpoint from ${checkpointPath}: ${error.message}`);
-  process.exit(1);
-}
-
+const checkpoint = JSON.parse(fs.readFileSync(checkpointPath, 'utf8'));
 // Checkpoint vocabulary is stored as array of [word, frequency] pairs
 const vocabulary = new Map(checkpoint.vocabulary);
-const vocabWords = new Set(checkpoint.vocabulary.map(([word]) => word));
+const vocabWords = new Set(checkpoint.vocabulary.map(([word, _]) => word));
 
 console.log('='.repeat(70));
 console.log('AG-TUNE PRE-TRAINED MODEL DEMONSTRATION');
@@ -144,7 +131,7 @@ const sortedVocab = checkpoint.vocabulary
   .sort((a, b) => b[1] - a[1])
   .slice(0, 50);
 
-console.log(sortedVocab.map(([word]) => word).join(', '));
+console.log(sortedVocab.map(([word, _]) => word).join(', '));
 console.log();
 
 // Categorize vocabulary
