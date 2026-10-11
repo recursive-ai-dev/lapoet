@@ -7,6 +7,13 @@ import { CYKParser } from './test-cyk-parser.js';
 // MODULE-LEVEL VALIDATION TESTS FOR AG-TUNE
 // Validates behavioral invariants of each component
 
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { UniversalLinguisticEngine } from './src/UniversalLinguisticEngine.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // ============================================================================
 // MINIMAL CLASS IMPLEMENTATIONS FOR TESTING
 // ============================================================================
@@ -51,7 +58,7 @@ class KernelPCA {
     }
     totalMean /= n * n;
 
-    const centered = Array(n).fill().map(() => Array(n).fill(0));
+    const centered = Array.from({ length: n }, () => Array(n).fill(0));
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
         centered[i][j] = K[i][j] - rowMeans[i] - colMeans[j] + totalMean;
@@ -79,7 +86,7 @@ class KernelPCA {
     };
 
     for (let k = 0; k < Math.min(this.nComponents, n); k++) {
-      let v = deflate(Array(n).fill().map(() => Math.random() - 0.5));
+      let v = deflate(Array.from({ length: n }, () => Math.random() - 0.5));
 
       for (let iter = 0; iter < 50; iter++) {
         let newV = Array(n).fill(0);
@@ -116,7 +123,7 @@ class KernelPCA {
     this.X_fit = X;
     const n = X.length;
     
-    const K = Array(n).fill().map(() => Array(n).fill(0));
+    const K = Array.from({ length: n }, () => Array(n).fill(0));
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
         K[i][j] = this._polynomialKernel(X[i], X[j]);
@@ -225,11 +232,68 @@ class FloydCycleDetector {
   }
 }
 
+class CYKParser {
+  constructor() {
+    this.rules = new Map();
+    this.terminals = new Set();
+    this.nonterminals = new Set();
+  }
+
+  addRule(lhs, rhs) {
+    if (!this.rules.has(lhs)) {
+      this.rules.set(lhs, []);
+    }
+    this.rules.get(lhs).push(rhs);
+    this.nonterminals.add(lhs);
+    
+    rhs.forEach(symbol => {
+      if (symbol.length === 1 && symbol === symbol.toLowerCase()) {
+        this.terminals.add(symbol);
+      }
+    });
+  }
+
+  parse(tokens) {
+    const n = tokens.length;
+    if (n === 0) return false;
+
+    const table = Array.from({ length: n }, () =>
+      Array.from({ length: n }, () => new Set())
+    );
+
+    for (let i = 0; i < n; i++) {
+      for (const [lhs, rhsList] of this.rules) {
+        for (const rhs of rhsList) {
+          if (rhs.length === 1 && rhs[0] === tokens[i]) {
+            table[i][i].add(lhs);
+          }
+        }
+      }
+    }
+
+    for (let length = 2; length <= n; length++) {
+      for (let i = 0; i <= n - length; i++) {
+        const j = i + length - 1;
+        
+        for (let k = i; k < j; k++) {
+          for (const [lhs, rhsList] of this.rules) {
+            for (const rhs of rhsList) {
+              if (rhs.length === 2) {
+                const [B, C] = rhs;
+                if (table[i][k].has(B) && table[k + 1][j].has(C)) {
+                  table[i][j].add(lhs);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
 
 
 class TDValueEstimator {
   constructor(nFeatures = 24, alpha = 0.01, gamma = 0.95, lambda = 0.8) {
-    this.weights = Array(nFeatures).fill(0).map(() => Math.random() * 0.01);
+    this.weights = Array.from({ length: nFeatures }, () => Math.random() * 0.01);
     this.alpha = alpha;
     this.gamma = gamma;
     this.lambda = lambda;
@@ -523,7 +587,7 @@ runTest('Fuzz testing: Random token sequences are rejected', () => {
   // Random invalid sequences
   let rejectedCount = 0;
   for (let i = 0; i < 20; i++) {
-    const randomTokens = Array(5).fill().map(() => 
+    const randomTokens = Array.from({ length: 5 }, () =>
       ['x', 'y', 'z', 'random', 'invalid'][Math.floor(Math.random() * 5)]
     );
     
@@ -715,6 +779,22 @@ runTest('Eligibility trace decay: λ → 0 vs λ → 1 behavior differs', () => 
 
 
 // ============================================================================
+
+console.log('\n[2.6] Universal Linguistic Engine Validation\n');
+
+// Test: Missing Error Path Test: LogicChainError INVALID_INPUT in generateStructure
+runTest('generateStructure validates complexity bounds', () => {
+  const ule = new UniversalLinguisticEngine({ rng: () => 0.5 });
+
+  let zeroFailed = false;
+  try { ule.generateStructure({ complexity: 0 }); } catch (e) { zeroFailed = (e.code === 'INVALID_INPUT'); }
+
+  let sixFailed = false;
+  try { ule.generateStructure({ complexity: 6 }); } catch (e) { sixFailed = (e.code === 'INVALID_INPUT'); }
+
+  ule.generateStructure({ complexity: 3 });
+
+  return zeroFailed && sixFailed;
 // 2.6 CONSTRAINT GRAMMAR TESTS
 // ============================================================================
 
