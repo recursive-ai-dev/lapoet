@@ -37,7 +37,20 @@ if (!fs.existsSync(checkpointPath)) {
 
 console.log('\n[Loading Checkpoint]\n');
 
-const checkpointData = JSON.parse(fs.readFileSync(checkpointPath, 'utf8'));
+let checkpointData;
+try {
+  checkpointData = JSON.parse(fs.readFileSync(checkpointPath, 'utf8'));
+  if (typeof checkpointData !== 'object' || checkpointData === null) {
+    throw new Error('Checkpoint data is not a valid JSON object');
+  }
+  if (!checkpointData.vocabulary || !checkpointData.emotionalSpace) {
+    throw new Error('Checkpoint data is missing required fields');
+  }
+} catch (error) {
+  console.error(`Error loading checkpoint from ${checkpointPath}: ${error.message}`);
+  process.exit(1);
+}
+
 
 console.log(`✓ Vocabulary size: ${checkpointData.vocabulary.length}`);
 console.log(`✓ Emotional space size: ${checkpointData.emotionalSpace.length}`);

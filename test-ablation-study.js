@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CYKParser } from './test-cyk-parser.js';
 // Copyright 2025
 // Damien Davison & Michael Maillet & Sacha Davison
 // Recursive AI Devs
@@ -281,59 +282,7 @@ console.log(`  ✓ Kernel PCA creates emotional space\n`);
 // Test 5: CYK Parser validates grammar
 console.log('Test 5: CYK Grammar Parser Functionality');
 
-class CYKParser {
-  constructor() {
-    this.rules = new Map();
-  }
 
-  addRule(lhs, rhs) {
-    if (!this.rules.has(lhs)) {
-      this.rules.set(lhs, []);
-    }
-    this.rules.get(lhs).push(rhs);
-  }
-
-  parse(tokens) {
-    const n = tokens.length;
-    if (n === 0) return false;
-
-    const table = Array(n).fill().map(() => 
-      Array(n).fill().map(() => new Set())
-    );
-
-    // Fill diagonal (terminals)
-    for (let i = 0; i < n; i++) {
-      for (const [lhs, rhsList] of this.rules) {
-        for (const rhs of rhsList) {
-          if (rhs.length === 1 && rhs[0] === tokens[i]) {
-            table[i][i].add(lhs);
-          }
-        }
-      }
-    }
-
-    // Fill upper triangle (non-terminals)
-    for (let length = 2; length <= n; length++) {
-      for (let i = 0; i <= n - length; i++) {
-        const j = i + length - 1;
-        for (let k = i; k < j; k++) {
-          for (const [lhs, rhsList] of this.rules) {
-            for (const rhs of rhsList) {
-              if (rhs.length === 2) {
-                const [B, C] = rhs;
-                if (table[i][k].has(B) && table[k + 1][j].has(C)) {
-                  table[i][j].add(lhs);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    return table[0][n - 1].has('S');
-  }
-}
 
 const parser = new CYKParser();
 parser.addRule('S', ['NP', 'VP']);
